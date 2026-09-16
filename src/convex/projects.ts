@@ -40,7 +40,6 @@ export const create = mutation({
     custom_story_direction: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
     return await ctx.db.insert("projects", {
       ...args,
       visual_style: "premium_editorial_explainer",
@@ -53,8 +52,7 @@ export const create = mutation({
         visuals: "QUEUED",
         editing: "QUEUED",
       },
-      _creationTime: now,
-    } as any);
+    });
   },
 });
 

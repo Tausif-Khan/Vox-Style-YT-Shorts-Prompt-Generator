@@ -88,7 +88,7 @@ export default function Landing() {
 
       {/* Hero */}
       <div className="rules-bg relative">
-        <div className="relative mx-auto flex min-h-[96vh] max-w-6xl flex-col items-center justify-center px-6 text-center">
+        <div className="relative mx-auto flex min-h-[96vh] max-w-6xl flex-col items-center justify-center px-6 pb-24 pt-32 text-center">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-amber-film/[0.07] blur-[130px]"

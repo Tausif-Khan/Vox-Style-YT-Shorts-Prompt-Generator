@@ -8,7 +8,7 @@ export interface GenerateOptions {
   system: string;
   user: string;
   schemaJson: string; // JSON Schema description of the expected output
-  maxTokens?: number;
+  maxTokens?: number; // scenes payloads are large; 16384 avoids truncation
   temperature?: number;
 }
 
@@ -29,21 +29,26 @@ export class GeminiProvider implements AIProvider {
     }
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.6-flash",
       systemInstruction: opts.system,
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: opts.schemaJson ? JSON.parse(opts.schemaJson) : undefined,
-        maxOutputTokens: opts.maxTokens ?? 8192,
+        maxOutputTokens: opts.maxTokens ?? 16384,
         temperature: opts.temperature ?? 0.6,
       },
     });
     const result = await model.generateContent(opts.user);
-    const text = result.response.text();
+    let text = result.response.text();
+    // ponytail: strip optional markdown fences some models wrap JSON in
+    text = text.replace(/^```(?:json)?\s*/m, "").replace(/\s*```$/m, "").trim();
     try {
       return JSON.parse(text);
     } catch {
-      throw new Error("AI returned invalid JSON. Retry the stage.");
+      // likely truncated by token cap — signal retryable failure
+      throw new Error(
+        `AI returned invalid JSON (${text.length} chars${text.length >= 7000 ? ", likely truncated" : ""}). Retry the stage.`
+      );
     }
   }
 }

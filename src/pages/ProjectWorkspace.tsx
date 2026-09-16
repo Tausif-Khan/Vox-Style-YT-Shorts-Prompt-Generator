@@ -29,12 +29,12 @@ const TABS = ["Story", "Script", "Scenes", "Visuals", "Edit", "Export"] as const
 type Tab = (typeof TABS)[number];
 
 const STAGES: { key: ProjectStage; label: string }[] = [
-  { key: "research", label: "Research" },
-  { key: "story", label: "Story" },
-  { key: "script", label: "Script" },
-  { key: "scenes", label: "Scenes" },
-  { key: "visuals", label: "Visuals" },
-  { key: "editing", label: "Editing" },
+  { key: "research", label: "1 · Research" },
+  { key: "story", label: "2 · Story" },
+  { key: "script", label: "3 · Script" },
+  { key: "visuals", label: "4 · Visual Style" },
+  { key: "scenes", label: "5 · Scenes" },
+  { key: "editing", label: "6 · Edit Plan" },
 ];
 
 function fmt(t: number): string {
@@ -240,33 +240,36 @@ export default function ProjectWorkspace() {
       </div>
 
       {/* Stage tracker */}
-      <div className="panel mb-6 flex flex-wrap items-center gap-x-1 gap-y-2 p-2">
-        {STAGES.map((s, i) => (
-          <div key={s.key} className="flex items-center">
-            <button
-              className="group flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-bone-300 transition hover:bg-ink-800 hover:text-bone-100"
-              onClick={() => handleRunStage(s.key)}
-              disabled={running !== null}
-              title={`Regenerate ${s.label}`}
-            >
-              {running === s.key ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
-              ) : (
-                <StageBadge status={stageStatus[s.key]} />
-              )}
-              {s.label}
-              <RefreshCw className="h-3 w-3 opacity-0 transition group-hover:opacity-60" />
-            </button>
-            {i < STAGES.length - 1 && <span className="text-ink-600">/</span>}
-          </div>
+      <div className="panel mb-3 flex flex-wrap items-center gap-2 p-3">
+        <span className="label-xs mr-1">Pipeline</span>
+        {STAGES.map((s) => (
+          <button
+            key={s.key}
+            className="group flex items-center gap-2 rounded-full border border-ink-600 bg-ink-850 px-3.5 py-2 text-xs font-medium text-bone-200 shadow-sm transition hover:-translate-y-px hover:border-amber-film/50 hover:text-bone-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            onClick={() => handleRunStage(s.key)}
+            disabled={running !== null}
+            title={`Click to generate or regenerate ${s.label.toLowerCase()}`}
+          >
+            {running === s.key ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
+            ) : (
+              <StageBadge status={stageStatus[s.key]} />
+            )}
+            {s.label}
+            <RefreshCw className="h-3 w-3 text-bone-400 opacity-40 transition group-hover:opacity-100 group-hover:text-amber-film" />
+          </button>
         ))}
-        {project.last_error && (
-          <span className="ml-auto mr-2 flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="max-w-72 truncate">{project.last_error}</span>
-          </span>
-        )}
+        <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-bone-400 md:flex">
+          <RefreshCw className="h-3 w-3" /> Click any step to generate or redo it
+        </span>
       </div>
+
+      {project.last_error && (
+        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-2.5 text-xs leading-relaxed text-red-400">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words">{project.last_error}</span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-6 flex gap-1 border-b border-ink-700/80">

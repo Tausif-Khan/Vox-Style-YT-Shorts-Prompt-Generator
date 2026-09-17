@@ -2,33 +2,16 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { getProvider, geminiSchemas } from "./ai";
 import {
-  researchPrompt,
   storyPrompt,
   scriptPrompt,
-  visualBiblePrompt,
   scenePlannerPrompt,
-  editingPlanPrompt,
   regenerateScenePrompt,
   PROMPT_VERSIONS,
   STORY_TYPE_GUIDANCE,
 } from "./ai/prompts";
-import {
-  researchSchema,
-  storySchema,
-  scriptSchema,
-  visualBibleSchema,
-  editingPlanSchema,
-  sceneSchema,
-} from "../lib/schemas";
+import { storySchema, scriptSchema, sceneSchema } from "../lib/schemas";
+import { resolveSceneCount } from "./projects";
 import { internal } from "./_generated/api";
-
-/** Resolve "auto" scene count from duration. */
-function resolveSceneCount(duration: number, sceneCount: string | number): number {
-  if (typeof sceneCount === "number") return sceneCount;
-  if (duration <= 30) return 6;
-  if (duration <= 60) return 10;
-  return 14;
-}
 
 /** Resolve "auto" story type from topic keywords. */
 function resolveStoryType(topic: string, requested: string): string {
@@ -45,18 +28,18 @@ function resolveStoryType(topic: string, requested: string): string {
 async function callAI(
   system: string,
   user: string,
-  schemaKey: keyof typeof geminiSchemas,
-  temperature = 0.6
+  schemaKey: "story" | "script" | "scenes" | "scene",
+  temperature = 0.6,
+  maxTokens = 16384
 ): Promise<unknown> {
   const provider = getProvider();
-  const raw = await provider.generate({
+  return await provider.generate({
     system,
     user,
     schemaJson: JSON.stringify(geminiSchemas[schemaKey]),
     temperature,
-    maxTokens: 8192,
+    maxTokens,
   });
-  return raw;
 }
 
 /** Validate + normalize a scene object. */
@@ -78,17 +61,14 @@ function normalizeScene(raw: any, fallbackNarration = "") {
   };
 }
 
+const STAGE_LITERALS = {
+  stage: v.union(v.literal("story"), v.literal("script"), v.literal("scenes")),
+} as const;
+
 export const runStage = internalAction({
   args: {
     projectId: v.id("projects"),
-    stage: v.union(
-      v.literal("research"),
-      v.literal("story"),
-      v.literal("script"),
-      v.literal("scenes"),
-      v.literal("visuals"),
-      v.literal("editing")
-    ),
+    ...STAGE_LITERALS,
   },
   handler: async (ctx, args) => {
     const project = await ctx.runQuery(internal.projects.getProjectInternal, {
@@ -97,43 +77,19 @@ export const runStage = internalAction({
     if (!project) throw new Error("Project not found");
 
     try {
-      const duration = project.duration;
-      const sceneCount = resolveSceneCount(duration, project.scene_count);
-      const storyType = resolveStoryType(project.topic, project.story_type);
-
-      // ---------- RESEARCH ----------
-      if (args.stage === "research") {
-        const raw = await callAI(
-          "You are the research desk of a premium editorial documentary studio. Return JSON only.",
-          researchPrompt(project.topic),
-          "research",
-          0.3
-        );
-        const data = researchSchema.parse(raw);
-        await ctx.runMutation(internal.stages.saveStage, {
-          projectId: args.projectId,
-          table: "research",
-          data,
-          promptVersion: PROMPT_VERSIONS.research,
-        });
-      }
-
-      // ---------- STORY ----------
+      // ---------- STORY (research + story architecture in one call) ----------
       if (args.stage === "story") {
-        const researchRow = await ctx.runQuery(internal.stages.getStage, {
-          projectId: args.projectId,
-          table: "research",
-        });
-        if (!researchRow) throw new Error("Run Research first.");
+        const storyType = resolveStoryType(project.topic, project.story_type);
         const raw = await callAI(
-          "You are the story architect of a premium editorial documentary studio. Return JSON only.",
+          "You are the research desk and story architect of a premium editorial documentary studio. Return JSON only.",
           storyPrompt({
-            research: JSON.stringify(researchRow.data),
+            topic: project.topic,
             storyType,
             guidance: STORY_TYPE_GUIDANCE[storyType] ?? STORY_TYPE_GUIDANCE.custom,
             custom: project.custom_story_direction,
           }),
-          "story"
+          "story",
+          0.5
         );
         const data = storySchema.parse(raw);
         await ctx.runMutation(internal.stages.saveStage, {
@@ -151,16 +107,12 @@ export const runStage = internalAction({
           table: "story",
         });
         if (!storyRow) throw new Error("Run Story first.");
-        const researchRow = await ctx.runQuery(internal.stages.getStage, {
-          projectId: args.projectId,
-          table: "research",
-        });
+        const sceneCount = resolveSceneCount(project.duration, project.scene_count);
         const raw = await callAI(
           "You are the scriptwriter of a premium editorial documentary studio. Return JSON only.",
           scriptPrompt({
             story: JSON.stringify(storyRow.data),
-            research: researchRow ? JSON.stringify(researchRow.data) : "",
-            duration,
+            duration: project.duration,
             sceneCount,
           }),
           "script"
@@ -174,30 +126,7 @@ export const runStage = internalAction({
         });
       }
 
-      // ---------- VISUAL BIBLE ----------
-      if (args.stage === "visuals") {
-        const researchRow = await ctx.runQuery(internal.stages.getStage, {
-          projectId: args.projectId,
-          table: "research",
-        });
-        const raw = await callAI(
-          "You are the visual director of a premium editorial documentary studio. Return JSON only.",
-          visualBiblePrompt({
-            topic: project.topic,
-            research: researchRow ? JSON.stringify(researchRow.data) : "",
-          }),
-          "visualBible"
-        );
-        const data = visualBibleSchema.parse(raw);
-        await ctx.runMutation(internal.stages.saveStage, {
-          projectId: args.projectId,
-          table: "visual_bible",
-          data,
-          promptVersion: PROMPT_VERSIONS.visual_bible,
-        });
-      }
-
-      // ---------- SCENES ----------
+      // ---------- SCENES (Flow-ready prompts, budget-aware) ----------
       if (args.stage === "scenes") {
         const storyRow = await ctx.runQuery(internal.stages.getStage, {
           projectId: args.projectId,
@@ -207,25 +136,17 @@ export const runStage = internalAction({
           projectId: args.projectId,
           table: "script",
         });
-        const bibleRow = await ctx.runQuery(internal.stages.getStage, {
-          projectId: args.projectId,
-          table: "visual_bible",
-        });
         if (!scriptRow) throw new Error("Run Script first.");
 
         const scriptData = scriptRow.data as {
           sections: { scene_number: number; start_time: number; end_time: number; narration: string }[];
         };
-        const bibleText = bibleRow
-          ? JSON.stringify(bibleRow.data)
-          : "Use the default premium editorial documentary style.";
 
         const raw = await callAI(
           "You are the scene planner of a premium editorial documentary studio. Return JSON only.",
           scenePlannerPrompt({
             story: storyRow ? JSON.stringify(storyRow.data) : "",
             scriptSections: JSON.stringify(scriptData.sections),
-            visualBible: bibleText,
             aspectRatio: project.aspect_ratio,
           }),
           "scenes",
@@ -246,31 +167,6 @@ export const runStage = internalAction({
             promptVersion: PROMPT_VERSIONS.scene_planner,
           });
         }
-      }
-
-      // ---------- EDITING ----------
-      if (args.stage === "editing") {
-        const scenes = await ctx.runQuery(internal.stages.getScenes, {
-          projectId: args.projectId,
-        });
-        if (scenes.length === 0) throw new Error("Run Scenes first.");
-        const sorted = [...scenes].sort((a: any, b: any) => a.scene_number - b.scene_number);
-        const raw = await callAI(
-          "You are the finishing editor of a premium editorial documentary studio. Return JSON only.",
-          editingPlanPrompt({
-            scenes: JSON.stringify(sorted.map((s: any) => s.data)),
-            duration,
-          }),
-          "editingPlan",
-          0.3
-        );
-        const data = editingPlanSchema.parse(raw);
-        await ctx.runMutation(internal.stages.saveStage, {
-          projectId: args.projectId,
-          table: "editing_plan",
-          data,
-          promptVersion: PROMPT_VERSIONS.editing,
-        });
       }
 
       await ctx.runMutation(internal.projects.setStageStatus, {
@@ -303,12 +199,6 @@ export const regenerateScene = internalAction({
     const target = scenes.find((s: any) => s.scene_number === args.sceneNumber);
     if (!target) throw new Error("Scene not found.");
 
-    const bibleRow = await ctx.runQuery(internal.stages.getStage, {
-      projectId: args.projectId,
-      table: "visual_bible",
-    });
-    const bibleText = bibleRow ? JSON.stringify(bibleRow.data) : "Default premium editorial documentary style.";
-
     const neighbors = (scenes as any[])
       .filter((s) => Math.abs(s.scene_number - args.sceneNumber) === 1)
       .sort((a, b) => a.scene_number - b.scene_number)
@@ -319,7 +209,6 @@ export const regenerateScene = internalAction({
       "You are regenerating one scene of a premium editorial documentary. Return JSON only.",
       regenerateScenePrompt({
         scene: JSON.stringify(target.data),
-        visualBible: bibleText,
         instruction: args.instruction,
         neighbors: neighbors || "None.",
       }),

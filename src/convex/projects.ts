@@ -27,6 +27,14 @@ export const getProjectInternal = internalQuery({
   },
 });
 
+/** Resolve "auto" scene count from duration — kept LOW for free Flow accounts. */
+export function resolveSceneCount(duration: number, sceneCount: number): number {
+  if (sceneCount > 0) return sceneCount;
+  if (duration <= 30) return 6;
+  if (duration <= 60) return 8;
+  return 10;
+}
+
 export const create = mutation({
   args: {
     userId: v.string(),
@@ -35,7 +43,7 @@ export const create = mutation({
     duration: v.number(),
     aspect_ratio: v.string(),
     language: v.string(),
-    scene_count: v.union(v.string(), v.number()),
+    scene_count: v.number(), // resolved "auto" client-side; >0
     story_type: v.string(),
     custom_story_direction: v.optional(v.string()),
   },
@@ -45,12 +53,9 @@ export const create = mutation({
       visual_style: "premium_editorial_explainer",
       status: "draft",
       stage_status: {
-        research: "QUEUED",
         story: "QUEUED",
         script: "QUEUED",
         scenes: "QUEUED",
-        visuals: "QUEUED",
-        editing: "QUEUED",
       },
     });
   },
@@ -61,7 +66,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
     if (!project || project.userId !== args.userId) return;
-    const tables = ["research", "story", "script", "visual_bible", "scenes", "editing_plan"] as const;
+    const tables = ["story", "script", "scenes"] as const;
     for (const table of tables) {
       const rows = await ctx.db
         .query(table)
@@ -87,7 +92,15 @@ export const setStageStatus = internalMutation({
     const anyGenerating = Object.values(stage_status).some((s) => s === "GENERATING");
     const anyFailed = Object.values(stage_status).some((s) => s === "FAILED");
     const allDone = Object.values(stage_status).every((s) => s === "COMPLETED");
-    const status = anyGenerating ? "generating" : allDone ? "ready" : anyFailed ? "failed" : project.status === "generating" ? "draft" : project.status;
+    const status = anyGenerating
+      ? "generating"
+      : allDone
+        ? "ready"
+        : anyFailed
+          ? "failed"
+          : project.status === "generating"
+            ? "draft"
+            : project.status;
     await ctx.db.patch(args.id, {
       stage_status,
       status,

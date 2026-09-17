@@ -9,36 +9,25 @@ export default defineSchema({
     duration: v.number(),
     aspect_ratio: v.string(),
     language: v.string(),
-    scene_count: v.union(v.string(), v.number()), // "auto" | 8 | 10 | 12 | 15
+    scene_count: v.number(),
     story_type: v.string(),
     custom_story_direction: v.optional(v.string()),
     visual_style: v.string(),
     status: v.string(), // draft | generating | ready | failed
     stage_status: v.object({
-      research: v.string(), // QUEUED | GENERATING | COMPLETED | FAILED
-      story: v.string(),
+      story: v.string(), // QUEUED | GENERATING | COMPLETED | FAILED
       script: v.string(),
       scenes: v.string(),
-      visuals: v.string(),
-      editing: v.string(),
     }),
-    prompt_versions: v.optional(v.object({
-      research: v.string(),
-      story: v.string(),
-      script: v.string(),
-      scene_planner: v.string(),
-      visual_bible: v.string(),
-      editing: v.string(),
-    })),
+    prompt_versions: v.optional(
+      v.object({
+        story: v.string(),
+        script: v.string(),
+        scene_planner: v.string(),
+      })
+    ),
     last_error: v.optional(v.string()),
-  })
-    .index("by_user", ["userId"]),
-
-  research: defineTable({
-    projectId: v.id("projects"),
-    data: v.any(),
-    prompt_version: v.string(),
-  }).index("by_project", ["projectId"]),
+  }).index("by_user", ["userId"]),
 
   story: defineTable({
     projectId: v.id("projects"),
@@ -52,21 +41,9 @@ export default defineSchema({
     prompt_version: v.string(),
   }).index("by_project", ["projectId"]),
 
-  visual_bible: defineTable({
-    projectId: v.id("projects"),
-    data: v.any(),
-    prompt_version: v.string(),
-  }).index("by_project", ["projectId"]),
-
   scenes: defineTable({
     projectId: v.id("projects"),
     scene_number: v.number(),
-    data: v.any(),
-    prompt_version: v.string(),
-  }).index("by_project", ["projectId"]),
-
-  editing_plan: defineTable({
-    projectId: v.id("projects"),
     data: v.any(),
     prompt_version: v.string(),
   }).index("by_project", ["projectId"]),

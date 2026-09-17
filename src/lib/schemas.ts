@@ -1,25 +1,11 @@
 import { z } from "zod";
 import { VISUAL_TYPES, TRANSITION_TYPES } from "./types";
 
-export const researchSchema = z.object({
-  topic: z.string(),
-  central_question: z.string().min(1),
-  summary: z.string().min(1),
-  timeline: z.array(z.object({ period: z.string(), event: z.string() })).min(1),
-  locations: z.array(z.string()),
-  people: z.array(z.string()),
-  key_events: z.array(z.string()).min(1),
-  key_facts: z.array(z.string()).min(1),
-  common_misconceptions: z.array(z.string()),
-  controversial_or_disputed_claims: z.array(z.string()),
-  sources: z.array(z.string()).min(1),
-});
-
 export const storySchema = z.object({
   central_question: z.string().min(1),
+  summary: z.string().min(1),
   hook: z.string().min(1),
-  core_idea: z.string().min(1),
-  story_angle: z.string().min(1),
+  key_facts: z.array(z.string()).min(1),
   narrative_structure: z
     .array(z.object({ stage: z.string(), description: z.string() }))
     .min(1),
@@ -64,45 +50,6 @@ export const sceneSchema = z.object({
   continuity_notes: z.string(),
 });
 
-export const scenesArraySchema = z.object({
-  scenes: z.array(sceneSchema).min(1),
-});
-
-export const visualBibleSchema = z.object({
-  overall_style: z.string().min(1),
-  realism: z.string().min(1),
-  camera_language: z.string().min(1),
-  lighting: z.string().min(1),
-  color_direction: z.string().min(1),
-  texture: z.string().min(1),
-  historical_accuracy: z.string().min(1),
-  human_character_direction: z.string().min(1),
-  environment_direction: z.string().min(1),
-  motion_direction: z.string().min(1),
-  things_to_avoid: z.array(z.string()).min(1),
-});
-
-export const editingPlanSchema = z.object({
-  total_duration: z.number().positive(),
-  scenes: z
-    .array(
-      z.object({
-        scene: z.number().int().positive(),
-        start: z.number().nonnegative(),
-        end: z.number().positive(),
-        visual: z.string(),
-        narration: z.string(),
-        graphics: z.string(),
-        transition: z.string(),
-        audio: z.string(),
-      })
-    )
-    .min(1),
-});
-
-export type ResearchInput = z.infer<typeof researchSchema>;
 export type StoryInput = z.infer<typeof storySchema>;
 export type ScriptInput = z.infer<typeof scriptSchema>;
 export type SceneInput = z.infer<typeof sceneSchema>;
-export type VisualBibleInput = z.infer<typeof visualBibleSchema>;
-export type EditingPlanInput = z.infer<typeof editingPlanSchema>;

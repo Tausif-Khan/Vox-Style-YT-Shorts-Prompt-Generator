@@ -46,7 +46,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
       {label}
     </button>
   );
@@ -56,8 +56,8 @@ function StageBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     QUEUED: "bg-ink-700 text-bone-400",
     GENERATING: "bg-amber-film/15 text-amber-film",
-    COMPLETED: "bg-emerald-500/15 text-emerald-400",
-    FAILED: "bg-red-500/15 text-red-400",
+    COMPLETED: "bg-emerald-400/20 text-emerald-300",
+    FAILED: "bg-red-500/20 text-red-300",
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${styles[status] ?? styles.QUEUED}`}>
@@ -221,16 +221,13 @@ export default function ProjectWorkspace({
         </div>
       </div>
 
-      {/* Stage tracker */}
+      {/* Stage tracker — STATUS ONLY. Regenerate buttons live at the bottom of each tab. */}
       <div className="panel mb-3 p-3">
         <div className="grid grid-cols-3 gap-2">
           {STAGES.map((s) => (
-            <button
+            <div
               key={s.key}
-              className="group flex items-center justify-center gap-2 rounded-full border border-ink-600 bg-ink-850 px-3.5 py-2 text-xs font-medium text-bone-200 shadow-sm transition hover:-translate-y-px hover:border-amber-film/50 hover:text-bone-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-              onClick={() => handleRunStage(s.key)}
-              disabled={running !== null}
-              title={`Click to generate or regenerate ${s.label.toLowerCase()}`}
+              className="flex items-center justify-center gap-2 rounded-full border border-ink-600 bg-ink-850 px-3.5 py-2 text-xs font-medium text-bone-200"
             >
               {running === s.key ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
@@ -238,17 +235,16 @@ export default function ProjectWorkspace({
                 <StageBadge status={stageStatus[s.key]} />
               )}
               {s.label}
-              <RefreshCw className="h-3 w-3 text-bone-400 opacity-40 transition group-hover:opacity-100 group-hover:text-amber-film" />
-            </button>
+            </div>
           ))}
         </div>
         <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] text-bone-400">
-          <RefreshCw className="h-3 w-3" /> Click any step to generate or redo it
+          <RefreshCw className="h-3 w-3" /> Use the Regenerate button at the bottom of each tab to redo a step
         </p>
       </div>
 
       {project.last_error && (
-        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-2.5 text-xs leading-relaxed text-red-400">
+        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-xs leading-relaxed text-red-300">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 break-words">{project.last_error}</span>
         </div>
@@ -276,7 +272,7 @@ export default function ProjectWorkspace({
             <section className="panel relative overflow-hidden p-6">
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.05),transparent)]"
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(185,111,22,0.05),transparent)]"
               />
               <p className="label-xs relative mb-2">Central Question</p>
               <p className="relative font-serif text-2xl leading-relaxed text-bone-50">
@@ -310,6 +306,17 @@ export default function ProjectWorkspace({
               <p className="text-sm leading-relaxed text-bone-300">
                 {(story.data as StoryData).ending_payoff}
               </p>
+              <div className="mt-6 flex items-center justify-between border-t border-ink-700/60 pt-4">
+                <span className="text-xs text-bone-400">Not happy with the story angle?</span>
+                <button
+                  className="btn-secondary px-3.5 py-1.5 text-xs"
+                  onClick={() => handleRunStage("story")}
+                  disabled={running !== null}
+                >
+                  {running === "story" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Regenerate Story
+                </button>
+              </div>
             </section>
           ) : (
             <div className="panel p-10 text-center text-sm text-bone-400">
@@ -403,7 +410,20 @@ export default function ProjectWorkspace({
             <div className="panel p-10 text-center text-sm text-bone-400">
               {stageStatus.script === "GENERATING"
                 ? "Writing your narration…"
-                : "No script yet."}
+                : "No script yet. Regenerate from the Story tab once the story is ready."}
+            </div>
+          )}
+          {script && (
+            <div className="flex items-center justify-between border-t border-ink-700/60 pt-4">
+              <span className="text-xs text-bone-400">Not happy with the script?</span>
+              <button
+                className="btn-secondary px-3.5 py-1.5 text-xs"
+                onClick={() => handleRunStage("script")}
+                disabled={running !== null}
+              >
+                {running === "script" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Regenerate Script
+              </button>
             </div>
           )}
         </div>
@@ -501,6 +521,19 @@ export default function ProjectWorkspace({
               {stageStatus.scenes === "GENERATING"
                 ? "Planning your scene prompts…"
                 : "No scenes yet."}
+            </div>
+          )}
+          {sortedScenes.length > 0 && (
+            <div className="flex items-center justify-between border-t border-ink-700/60 pt-4">
+              <span className="text-xs text-bone-400">Not happy with the visuals?</span>
+              <button
+                className="btn-secondary px-3.5 py-1.5 text-xs"
+                onClick={() => handleRunStage("scenes")}
+                disabled={running !== null}
+              >
+                {running === "scenes" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Regenerate All Scene Prompts
+              </button>
             </div>
           )}
         </div>

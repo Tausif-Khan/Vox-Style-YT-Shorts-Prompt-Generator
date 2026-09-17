@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "dev": "convex dev & vite",
+    "dev": "sh ./scripts/dev.sh",
     "build": "vite build",
     "typecheck": "tsc -b --noEmit",
     "convex:dev": "convex dev --once"

@@ -76,6 +76,12 @@ export const runStage = internalAction({
     });
     if (!project) throw new Error("Project not found");
 
+    await ctx.runMutation(internal.projects.setStageStatus, {
+      id: args.projectId,
+      stage: args.stage,
+      status: "GENERATING",
+    });
+
     try {
       // ---------- STORY (research + story architecture in one call) ----------
       if (args.stage === "story") {

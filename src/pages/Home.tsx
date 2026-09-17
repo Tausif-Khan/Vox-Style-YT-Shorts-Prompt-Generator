@@ -14,6 +14,11 @@ import {
   Film,
   Timer,
   Trash2,
+  Copy,
+  Image,
+  Video,
+  Clapperboard,
+  ExternalLink,
 } from "lucide-react";
 
 const PIPELINE = [
@@ -48,7 +53,7 @@ const FEATURES = [
 const FAQ = [
   {
     q: "Is Documentary Studio really free?",
-    a: "Yes. The tool is free to use — the site is supported by advertising. You provide your own Google API key for AI generation.",
+    a: "Yes. The tool is free to use — the site is supported by advertising. AI generation runs on a free DeepSeek model via TokenHarbor.",
   },
   {
     q: "What do I get from one topic?",
@@ -89,6 +94,35 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Live progress: watch the active project's stage statuses.
+  const activeProject = useQuery(
+    api.projects.get,
+    activeId ? { id: activeId as any, userId } : "skip"
+  );
+  const stages = activeProject?.stage_status as Record<string, string> | undefined;
+  const completedCount = stages
+    ? ["story", "script", "scenes"].filter((k) => stages[k] === "COMPLETED").length
+    : 0;
+  const anyGenerating = stages
+    ? ["story", "script", "scenes"].some((k) => stages[k] === "GENERATING")
+    : false;
+  const anyFailed = stages
+    ? ["story", "script", "scenes"].some((k) => stages[k] === "FAILED")
+    : false;
+  // Progress bar: completed/3, plus partial credit while the current stage runs.
+  const progress = Math.min(100, Math.round(((completedCount + (anyGenerating ? 0.5 : 0)) / 3) * 100));
+  const generating =
+    submitting || (activeId !== null && (anyGenerating || (progress < 100 && !anyFailed && stages !== undefined)));
+  const [justStarted, setJustStarted] = useState(false);
+
+  // Scroll the progress card into view when a generation kicks off.
+  useEffect(() => {
+    if (justStarted) {
+      document.getElementById("progress-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setJustStarted(false);
+    }
+  }, [justStarted, activeId]);
+
   // Show the workspace inline when arriving at /?project=<id> or when just created.
   useEffect(() => {
     const qp = new URLSearchParams(window.location.search).get("project");
@@ -110,6 +144,7 @@ export default function Home() {
         story_type: "auto",
       });
       setActiveId(newId);
+      setJustStarted(true);
       window.history.replaceState(null, "", `/?project=${newId}`);
       void runPipeline({ projectId: newId }).catch((err) =>
         console.error("Generation failed", err)
@@ -140,12 +175,25 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Left ad rail (desktop only) */}
+      <div className="pointer-events-none fixed left-4 top-1/2 z-10 hidden -translate-y-1/2 xl:block">
+        <div className="pointer-events-auto">
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SLOT_LEFT} format="vertical" className="w-40" minHeight={450} />
+        </div>
+      </div>
+      {/* Right ad rail (desktop only) */}
+      <div className="pointer-events-none fixed right-4 top-1/2 z-10 hidden -translate-y-1/2 xl:block">
+        <div className="pointer-events-auto">
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SLOT_RIGHT} format="vertical" className="w-40" minHeight={450} />
+        </div>
+      </div>
+
       {/* Hero + Generator */}
       <div className="rules-bg relative">
         <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-32 text-center">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-amber-film/[0.07] blur-[130px]"
+            className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-[#7dd3c8]/[0.09] blur-[130px]"
           />
           <motion.div
             {...fade(0)}
@@ -180,7 +228,7 @@ export default function Home() {
             <div className="panel relative mx-auto max-w-2xl overflow-hidden p-6 text-left">
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.06),transparent)]"
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
               />
               <label className="label-xs relative mb-3 block">Your topic</label>
               <textarea
@@ -207,7 +255,7 @@ export default function Home() {
                         onClick={() => setDuration(d)}
                         className={`rounded-lg border px-4 py-2 text-sm transition-all duration-150 ${
                           duration === d
-                            ? "border-amber-film bg-amber-film/10 font-medium text-amber-film shadow-[0_0_0_3px_rgba(232,163,61,0.08)]"
+                            ? "border-white/70 bg-white/15 font-medium text-white shadow-[0_0_0_3px_rgba(125,211,200,0.15)]"
                             : "border-ink-600 bg-ink-850/70 text-bone-300 hover:-translate-y-px hover:border-bone-400/30 hover:text-bone-100"
                         }`}
                       >
@@ -217,13 +265,17 @@ export default function Home() {
                   </div>
                 </div>
                 <button
-                  className="btn-primary h-12 px-6 text-base"
+                  className={`btn-primary h-12 px-6 text-base ${generating ? "btn-generating" : ""}`}
                   disabled={!topic.trim() || submitting}
                   onClick={submit}
                 >
                   {submitting ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Starting…
+                    </>
+                  ) : generating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Working…
                     </>
                   ) : (
                     <>
@@ -238,11 +290,42 @@ export default function Home() {
               </p>
             </div>
 
+            {/* Live pipeline progress — visible while generating */}
+            {activeId && generating && (
+              <div id="progress-card" className="panel sheen mx-auto mt-6 max-w-2xl border-white/30 p-5 shadow-[0_0_40px_-12px_rgba(125,211,200,0.35)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="label-xs">Generating your documentary</p>
+                  <span className="text-xs font-semibold text-amber-film">{progress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-ink-700">
+                  <div className="progress-fill h-full rounded-full" style={{ width: `${progress}%` }} />
+                </div>
+                <div className="mt-3 flex justify-between text-[11px]">
+                  {PIPELINE.map((step, i) => {
+                    const done = completedCount > i;
+                    const active = !done && (anyGenerating ? completedCount === i : false);
+                    return (
+                      <span
+                        key={step.label}
+                        className={`flex items-center gap-1.5 ${done ? "text-emerald-300" : active ? "text-amber-film" : "text-bone-400/60"}`}
+                      >
+                        {done ? "✓" : active ? <Loader2 className="h-3 w-3 animate-spin" /> : "○"}
+                        {step.label}
+                      </span>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-center text-[11px] text-bone-400/80">
+                  This usually takes 1–3 minutes — you can scroll below, results appear as each step finishes.
+                </p>
+              </div>
+            )}
+
             {/* Pipeline strip */}
             <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5">
               {PIPELINE.map((step, i) => (
                 <div key={step.label} className="flex items-center gap-2.5">
-                  <div className="group flex items-center gap-2 rounded-full border border-ink-700/80 bg-ink-900/70 py-2 pl-3 pr-4 backdrop-blur transition hover:border-amber-film/40">
+                  <div className="group flex items-center gap-2 rounded-full border border-white/20 bg-white/10 py-2 pl-3 pr-4 backdrop-blur transition hover:border-white/40">
                     <step.icon className="h-3.5 w-3.5 text-amber-film" strokeWidth={1.75} />
                     <span className="text-xs font-medium tracking-wide text-bone-200">
                       {step.label}
@@ -298,7 +381,7 @@ export default function Home() {
                   </p>
                 </div>
                 <button
-                  className="btn-ghost text-red-400/60 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                  className="btn-ghost text-red-300/70 opacity-0 transition hover:text-red-300 group-hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (confirm(`Delete "${p.title}"?`)) void removeProject({ id: p._id, userId });
@@ -346,6 +429,74 @@ export default function Home() {
 
         {/* Ad between features and FAQ */}
         <AdSlot className="mt-14 w-full" minHeight={110} />
+      </div>
+
+      {/* ── HOW TO USE IN GOOGLE FLOW ── */}
+      <div id="how-to-flow" className="mx-auto max-w-6xl scroll-mt-24 px-6 pb-24">
+        <div className="mb-10 max-w-2xl">
+          <p className="label-xs mb-3">From Prompts to Video</p>
+          <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
+            Turn your prompts into a finished short — <span className="italic text-amber-film">in Google Flow.</span>
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-bone-300">
+            Every scene in the Scenes tab is built for Google Flow (free accounts work great).
+            Here is the exact workflow, scene by scene:
+          </p>
+        </div>
+        <ol className="grid gap-4 md:grid-cols-2">
+          {[
+            {
+              icon: Copy,
+              title: "1 · Copy a scene's prompts",
+              body: "Open the Scenes tab (or Export for everything at once). Each scene card has a one-tap Copy button for its image prompt and video prompt.",
+            },
+            {
+              icon: Image,
+              title: "2 · Create the still in Flow",
+              body: "At labs.google/flow, start a new project, set the aspect ratio to 9:16, and paste the image prompt into Text-to-Image. This is your scene's opening frame.",
+            },
+            {
+              icon: Video,
+              title: "3 · Animate it with the video prompt",
+              body: "Use Flow's Frames-to-Video with the still you just made, then paste the video prompt. It describes motion only — camera drifts, flickers, movement — which is exactly what Flow wants.",
+            },
+            {
+              icon: Clapperboard,
+              title: "4 · Assemble & voice it",
+              body: "Repeat for each scene, then stitch the clips in any editor (CapCut works). Record the narration from the Script tab, add the on-screen text and sound notes from each scene card, and export.",
+            },
+          ].map((step, i) => (
+            <motion.li
+              key={step.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.5, delay: (i % 2) * 0.08 }}
+              className="panel panel-hover relative overflow-hidden p-7"
+            >
+              <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
+                <step.icon className="h-5 w-5 text-amber-film" strokeWidth={1.75} />
+              </span>
+              <h3 className="mb-2 font-serif text-xl text-bone-50">{step.title}</h3>
+              <p className="relative text-sm leading-relaxed text-bone-300">{step.body}</p>
+            </motion.li>
+          ))}
+        </ol>
+        <div className="panel-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
+          <p className="text-sm leading-relaxed text-bone-300">
+            <span className="font-semibold text-bone-100">Free-account tip:</span>{" "}
+            generate your stills first — they cost fewer credits than video. Our scene counts (6–10)
+            are sized so a full documentary fits comfortably within Flow's free daily generations.
+          </p>
+          <a
+            href="https://labs.google/flow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary shrink-0"
+          >
+            Open Google Flow <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </div>
 
       {/* FAQ */}

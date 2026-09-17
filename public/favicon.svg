@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Documentary Studio mark: aperture ring + film wave, Aurora palette -->
+  <rect width="64" height="64" rx="14" fill="#04121b"/>
+  <circle cx="32" cy="32" r="17" fill="none" stroke="#7dd3c8" stroke-width="3"/>
+  <path d="M22 32c3.5-4 7.5-4 10 0s6.5 4 10 0" fill="none" stroke="#7dd3c8" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="4" fill="#7dd3c8"/>
+</svg>

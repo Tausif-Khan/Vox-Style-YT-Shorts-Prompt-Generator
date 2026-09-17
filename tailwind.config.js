@@ -5,33 +5,37 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Aurora liquid-glass language: deep storm-teal atmosphere, white ink.
+        // "ink" = page/atmosphere surfaces, "bone" = text tones, amber.film = glass accent.
         ink: {
-          950: "#0b0b0d",
-          900: "#121215",
-          850: "#17171b",
-          800: "#1d1d22",
-          700: "#26262c",
-          600: "#33333b",
-          500: "#4a4a54",
+          950: "#04121b",
+          900: "#0a1f2c",
+          850: "#0e2635",
+          800: "#12303f",
+          700: "#1a3d4f",
+          600: "#28505f",
+          500: "#3d6675",
         },
         bone: {
-          50: "#faf9f6",
-          100: "#f1efe9",
-          200: "#e2dfd5",
-          300: "#c8c4b6",
-          400: "#a29d8c",
+          50: "#ffffff",
+          100: "rgba(255,255,255,0.93)",
+          200: "rgba(255,255,255,0.85)",
+          300: "rgba(255,255,255,0.75)",
+          400: "rgba(255,255,255,0.62)",
         },
         amber: {
-          film: "#e8a33d",
-          film_dim: "#b5772a",
+          film: "#7dd3c8",
+          film_dim: "#5bb8ad",
         },
       },
       fontFamily: {
-        serif: ["Georgia", "Times New Roman", "serif"],
+        serif: ["Inter Tight", "Inter", "sans-serif"],
         sans: [
+          "Inter",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",
+          "Roboto",
           "Helvetica Neue",
           "Arial",
           "sans-serif",

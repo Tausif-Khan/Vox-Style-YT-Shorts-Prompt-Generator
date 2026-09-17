@@ -2,7 +2,6 @@ export type StageStatus = "QUEUED" | "GENERATING" | "COMPLETED" | "FAILED";
 
 export type AspectRatio = "9:16" | "16:9";
 export type DurationOption = 30 | 60 | 90;
-export type SceneCount = "auto" | 8 | 10 | 12 | 15;
 
 export type StoryType =
   | "auto"
@@ -44,19 +43,6 @@ export const VISUAL_TYPES = [
 ] as const;
 export type VisualType = (typeof VISUAL_TYPES)[number];
 
-export const GRAPHIC_TYPES = [
-  "MAP",
-  "TIMELINE",
-  "FLOW_DIAGRAM",
-  "DATA_VISUALIZATION",
-  "COMPARISON",
-  "LABELED_OBJECT",
-  "STATISTIC",
-  "TEXT_REVEAL",
-  "PROCESS_DIAGRAM",
-] as const;
-export type GraphicType = (typeof GRAPHIC_TYPES)[number];
-
 export const TRANSITION_TYPES = [
   "HARD_CUT",
   "MATCH_CUT",
@@ -71,29 +57,13 @@ export const TRANSITION_TYPES = [
 
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
 
-
-export type ResearchData = {
-  topic: string;
+export type StoryData = {
   central_question: string;
   summary: string;
-  timeline: { period: string; event: string }[];
-  locations: string[];
-  people: string[];
-  key_events: string[];
-  key_facts: string[];
-  common_misconceptions: string[];
-  controversial_or_disputed_claims: string[];
-  sources: string[];
-};
-
-export type StoryArchitecture = {
-  central_question: string;
   hook: string;
-  core_idea: string;
-  story_angle: string;
+  key_facts: string[];
   narrative_structure: { stage: string; description: string }[];
   key_reveals: string[];
-  arc: string;
   ending_payoff: string;
 };
 
@@ -136,34 +106,4 @@ export type Scene = {
   asset_status: "NOT_STARTED" | "PROMPT_READY" | "GENERATED" | "APPROVED" | "REJECTED";
 };
 
-export type VisualBible = {
-  overall_style: string;
-  realism: string;
-  camera_language: string;
-  lighting: string;
-  color_direction: string;
-  texture: string;
-  historical_accuracy: string;
-  human_character_direction: string;
-  environment_direction: string;
-  motion_direction: string;
-  things_to_avoid: string[];
-};
-
-export type EditingPlan = {
-  total_duration: number;
-  scenes: {
-    scene: number;
-    start: number;
-    end: number;
-    visual: string;
-    narration: string;
-    graphics: string;
-    transition: string;
-    audio: string;
-  }[];
-};
-
-export type ProjectStage = "research" | "story" | "script" | "scenes" | "visuals" | "editing";
-
-
+export type ProjectStage = "story" | "script" | "scenes";

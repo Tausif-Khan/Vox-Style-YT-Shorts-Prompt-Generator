@@ -3,14 +3,14 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 /**
- * Client entry point for full generation. Runs all stages in order.
+ * Client entry point for full generation. Runs all 3 stages in order.
  * Completed stages are skipped; failed stages can be retried individually
  * from the workspace.
  */
 export const startPipeline = action({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const stages = ["research", "story", "script", "visuals", "scenes", "editing"] as const;
+    const stages = ["story", "script", "scenes"] as const;
     let lastError: unknown = null;
     for (const stage of stages) {
       const project = await ctx.runQuery(internal.projects.getProjectInternal, {
@@ -24,7 +24,6 @@ export const startPipeline = action({
           stage,
         });
       } catch (err) {
-        // Keep going to later stages only if prerequisites exist; otherwise abort.
         lastError = err;
         break;
       }
@@ -36,14 +35,7 @@ export const startPipeline = action({
 export const runStage = action({
   args: {
     projectId: v.id("projects"),
-    stage: v.union(
-      v.literal("research"),
-      v.literal("story"),
-      v.literal("script"),
-      v.literal("scenes"),
-      v.literal("visuals"),
-      v.literal("editing")
-    ),
+    stage: v.union(v.literal("story"), v.literal("script"), v.literal("scenes")),
   },
   handler: async (ctx, args) => {
     await ctx.runAction(internal.generation.runStage, args);

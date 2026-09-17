@@ -4,14 +4,9 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
 import {
-  STORY_TYPE_LABELS,
-  type StoryType,
-  type ResearchData,
-  type StoryArchitecture,
+  type StoryData,
   type ScriptData,
   type Scene,
-  type VisualBible,
-  type EditingPlan,
   type ProjectStage,
 } from "../lib/types";
 import {
@@ -25,16 +20,13 @@ import {
   Pencil,
 } from "lucide-react";
 
-const TABS = ["Story", "Script", "Scenes", "Visuals", "Edit", "Export"] as const;
+const TABS = ["Story", "Script", "Scenes", "Export"] as const;
 type Tab = (typeof TABS)[number];
 
 const STAGES: { key: ProjectStage; label: string }[] = [
-  { key: "research", label: "1 · Research" },
-  { key: "story", label: "2 · Story" },
-  { key: "script", label: "3 · Script" },
-  { key: "visuals", label: "4 · Visual Style" },
-  { key: "scenes", label: "5 · Scenes" },
-  { key: "editing", label: "6 · Edit Plan" },
+  { key: "story", label: "1 · Story" },
+  { key: "script", label: "2 · Script" },
+  { key: "scenes", label: "3 · Scene Prompts" },
 ];
 
 function fmt(t: number): string {
@@ -107,8 +99,15 @@ function SceneRegenPanel({
   );
 }
 
-export default function ProjectWorkspace() {
-  const { id } = useParams<{ id: string }>();
+export default function ProjectWorkspace({
+  projectId,
+  compact = false,
+}: {
+  projectId?: string; // when omitted, read from the /project/:id route
+  compact?: boolean; // inline (single-page) mode: no page chrome/back link
+}) {
+  const params = useParams<{ id: string }>();
+  const id = projectId ?? params.id;
   const userId = getClientUserId();
   const [tab, setTab] = useState<Tab>("Story");
   const runStage = useAction(api.pipeline.runStage);
@@ -116,20 +115,15 @@ export default function ProjectWorkspace() {
   const updateNarration = useMutation(api.editing.updateNarration);
   const [running, setRunning] = useState<ProjectStage | null>(null);
   const [regenTarget, setRegenTarget] = useState<number | null>(null);
-  const [regenInstruction, setRegenInstruction] = useState("");
   const [editingScene, setEditingScene] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingNarration, setSavingNarration] = useState(false);
   const [resyncScene, setResyncScene] = useState<number | null>(null);
-  const [resyncInstruction, setResyncInstruction] = useState("");
 
   const project = useQuery(api.projects.get, { id: id as any, userId });
-  const research = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "research" });
   const story = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "story" });
   const script = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "script" });
-  const bible = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "visual_bible" });
   const scenes = useQuery(api.stages.getScenesPublic, { projectId: id as any });
-  const editPlan = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "editing_plan" });
 
   const sortedScenes = useMemo(
     () => [...(scenes ?? [])].sort((a, b) => a.scene_number - b.scene_number),
@@ -163,15 +157,15 @@ export default function ProjectWorkspace() {
     }
   };
 
-  const handleResyncScene = async (sceneNumber: number) => {
+  const handleRegenerateScene = async (sceneNumber: number, instruction: string) => {
     try {
       await regenScene({
         projectId: project._id,
         sceneNumber,
-        instruction: resyncInstruction.trim() || undefined,
+        instruction: instruction.trim() || undefined,
       });
+      setRegenTarget(null);
       setResyncScene(null);
-      setResyncInstruction("");
     } catch (e) {
       console.error(e);
     }
@@ -189,20 +183,6 @@ export default function ProjectWorkspace() {
     }
   };
 
-  const handleRegenerateScene = async (sceneNumber: number) => {
-    try {
-      await regenScene({
-        projectId: project._id,
-        sceneNumber,
-        instruction: regenInstruction.trim() || undefined,
-      });
-      setRegenTarget(null);
-      setRegenInstruction("");
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const allPromptsText = () =>
     sortedScenes
       .map(
@@ -215,12 +195,14 @@ export default function ProjectWorkspace() {
       .join("\n");
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-10">
+    <div className={compact ? "" : "mx-auto max-w-5xl px-8 py-10"}>
       {/* Header */}
       <div className="mb-6">
-        <Link to="/dashboard" className="btn-ghost mb-3 -ml-2.5 inline-flex">
-          <ArrowLeft className="h-4 w-4" /> Dashboard
-        </Link>
+        {!compact && (
+          <Link to="/dashboard" className="btn-ghost mb-3 -ml-2.5 inline-flex">
+            <ArrowLeft className="h-4 w-4" /> Dashboard
+          </Link>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="label-xs mb-2">Project</p>
@@ -230,7 +212,7 @@ export default function ProjectWorkspace() {
               <span className="text-ink-500">·</span>
               <span>{project.aspect_ratio}</span>
               <span className="text-ink-500">·</span>
-              <span>{STORY_TYPE_LABELS[project.story_type as StoryType] ?? project.story_type}</span>
+              <span>{sortedScenes.length || ""} scenes</span>
             </p>
           </div>
           <button className="btn-secondary" onClick={() => setTab("Export")}>
@@ -240,28 +222,29 @@ export default function ProjectWorkspace() {
       </div>
 
       {/* Stage tracker */}
-      <div className="panel mb-3 flex flex-wrap items-center gap-2 p-3">
-        <span className="label-xs mr-1">Pipeline</span>
-        {STAGES.map((s) => (
-          <button
-            key={s.key}
-            className="group flex items-center gap-2 rounded-full border border-ink-600 bg-ink-850 px-3.5 py-2 text-xs font-medium text-bone-200 shadow-sm transition hover:-translate-y-px hover:border-amber-film/50 hover:text-bone-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-            onClick={() => handleRunStage(s.key)}
-            disabled={running !== null}
-            title={`Click to generate or regenerate ${s.label.toLowerCase()}`}
-          >
-            {running === s.key ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
-            ) : (
-              <StageBadge status={stageStatus[s.key]} />
-            )}
-            {s.label}
-            <RefreshCw className="h-3 w-3 text-bone-400 opacity-40 transition group-hover:opacity-100 group-hover:text-amber-film" />
-          </button>
-        ))}
-        <span className="ml-auto hidden items-center gap-1.5 text-[11px] text-bone-400 md:flex">
+      <div className="panel mb-3 p-3">
+        <div className="grid grid-cols-3 gap-2">
+          {STAGES.map((s) => (
+            <button
+              key={s.key}
+              className="group flex items-center justify-center gap-2 rounded-full border border-ink-600 bg-ink-850 px-3.5 py-2 text-xs font-medium text-bone-200 shadow-sm transition hover:-translate-y-px hover:border-amber-film/50 hover:text-bone-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              onClick={() => handleRunStage(s.key)}
+              disabled={running !== null}
+              title={`Click to generate or regenerate ${s.label.toLowerCase()}`}
+            >
+              {running === s.key ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
+              ) : (
+                <StageBadge status={stageStatus[s.key]} />
+              )}
+              {s.label}
+              <RefreshCw className="h-3 w-3 text-bone-400 opacity-40 transition group-hover:opacity-100 group-hover:text-amber-film" />
+            </button>
+          ))}
+        </div>
+        <p className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] text-bone-400">
           <RefreshCw className="h-3 w-3" /> Click any step to generate or redo it
-        </span>
+        </p>
       </div>
 
       {project.last_error && (
@@ -289,78 +272,50 @@ export default function ProjectWorkspace() {
       {/* STORY */}
       {tab === "Story" && (
         <div className="space-y-6">
-          {research ? (
-            <>
-              <section className="panel relative overflow-hidden p-6">
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.05),transparent)]"
-                />
-                <p className="label-xs relative mb-2">Central Question</p>
-                <p className="relative font-serif text-2xl leading-relaxed text-bone-50">
-                  {(research.data as ResearchData).central_question}
-                </p>
-                <div className="divider-fade relative my-5" />
-                <p className="label-xs relative mb-2">Summary</p>
-                <p className="relative text-sm leading-relaxed text-bone-300">
-                  {(research.data as ResearchData).summary}
-                </p>
-              </section>
-              <section className="panel p-6">
-                <p className="label-xs mb-3">Timeline</p>
-                <div className="space-y-2">
-                  {(research.data as ResearchData).timeline.map((t, i) => (
-                    <div key={i} className="flex gap-4 text-sm">
-                      <span className="w-32 shrink-0 font-semibold text-amber-film">{t.period}</span>
-                      <span className="text-bone-300">{t.event}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-              <section className="panel grid gap-6 p-6 md:grid-cols-2">
-                <div>
-                  <p className="label-xs mb-3">Key Facts</p>
-                  <ul className="space-y-1.5 text-sm text-bone-300">
-                    {(research.data as ResearchData).key_facts.map((f, i) => (
-                      <li key={i}>• {f}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <p className="label-xs mb-3">Misconceptions & Disputed Claims</p>
-                  <ul className="space-y-1.5 text-sm text-bone-300">
-                    {[...(research.data as ResearchData).common_misconceptions,
-                      ...(research.data as ResearchData).controversial_or_disputed_claims].map((f, i) => (
-                      <li key={i}>• {f}</li>
-                    ))}
-                  </ul>
-                </div>
-              </section>
-              {story && (
-                <section className="panel p-6">
-                  <p className="label-xs mb-2">Story Angle</p>
-                  <p className="mb-4 font-serif text-lg text-bone-50">{(story.data as StoryArchitecture).story_angle}</p>
-                  <p className="label-xs mb-2">Hook</p>
-                  <p className="mb-4 text-sm text-bone-300">{(story.data as StoryArchitecture).hook}</p>
-                  <p className="label-xs mb-2">Ending Payoff</p>
-                  <p className="text-sm text-bone-300">{(story.data as StoryArchitecture).ending_payoff}</p>
-                  <p className="label-xs mb-2 mt-6">Narrative Structure</p>
-                  <div className="space-y-2">
-                    {(story.data as StoryArchitecture).narrative_structure.map((n, i) => (
-                      <div key={i} className="flex gap-3 text-sm">
-                        <span className="w-28 shrink-0 font-semibold uppercase text-amber-film">{n.stage}</span>
-                        <span className="text-bone-300">{n.description}</span>
-                      </div>
-                    ))}
+          {story ? (
+            <section className="panel relative overflow-hidden p-6">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.05),transparent)]"
+              />
+              <p className="label-xs relative mb-2">Central Question</p>
+              <p className="relative font-serif text-2xl leading-relaxed text-bone-50">
+                {(story.data as StoryData).central_question}
+              </p>
+              <div className="divider-fade relative my-5" />
+              <p className="label-xs relative mb-2">The Story</p>
+              <p className="relative font-serif text-lg italic leading-relaxed text-amber-film">
+                {(story.data as StoryData).hook}
+              </p>
+              <p className="relative mt-3 text-sm leading-relaxed text-bone-300">
+                {(story.data as StoryData).summary}
+              </p>
+              <p className="label-xs mb-2 mt-6">Narrative Structure</p>
+              <div className="space-y-2">
+                {(story.data as StoryData).narrative_structure.map((n, i) => (
+                  <div key={i} className="flex gap-3 text-sm">
+                    <span className="w-28 shrink-0 font-semibold uppercase text-amber-film">{n.stage}</span>
+                    <span className="text-bone-300">{n.description}</span>
                   </div>
-                </section>
-              )}
-            </>
+                ))}
+              </div>
+              <div className="divider-fade my-5" />
+              <p className="label-xs mb-2">Key Facts</p>
+              <ul className="grid gap-1.5 text-sm text-bone-300 md:grid-cols-2">
+                {(story.data as StoryData).key_facts.map((f, i) => (
+                  <li key={i}>• {f}</li>
+                ))}
+              </ul>
+              <p className="label-xs mb-2 mt-6">Ending Payoff</p>
+              <p className="text-sm leading-relaxed text-bone-300">
+                {(story.data as StoryData).ending_payoff}
+              </p>
+            </section>
           ) : (
             <div className="panel p-10 text-center text-sm text-bone-400">
-              {stageStatus.research === "GENERATING"
-                ? "Building your research dossier…"
-                : "No research yet. Click Research in the tracker above."}
+              {stageStatus.story === "GENERATING"
+                ? "Researching and building your story…"
+                : "No story yet. Click Story in the tracker above."}
             </div>
           )}
         </div>
@@ -421,7 +376,6 @@ export default function ProjectWorkspace() {
                             onClick={() => {
                               void saveNarration(sec.scene_number, editDraft.trim()).then(() => {
                                 setResyncScene(sec.scene_number);
-                                setResyncInstruction("");
                               });
                             }}
                           >
@@ -526,23 +480,17 @@ export default function ProjectWorkspace() {
                 </div>
                 {regenTarget === sc.scene_number && (
                   <SceneRegenPanel
-                    onConfirm={(instruction) => {
-                      setRegenInstruction(instruction);
-                      handleRegenerateScene(sc.scene_number);
-                    }}
+                    headline="Visuals were planned for the previous narration"
+                    onConfirm={(instruction) => handleRegenerateScene(sc.scene_number, instruction)}
                     onCancel={() => setRegenTarget(null)}
-                    busy={running !== null || resyncScene !== null}
+                    busy={running !== null}
                   />
                 )}
                 {resyncScene === sc.scene_number && (
                   <SceneRegenPanel
-                    headline="Visuals were planned for the previous narration"
-                    onConfirm={(instruction) => {
-                      setResyncInstruction(instruction);
-                      handleResyncScene(sc.scene_number);
-                    }}
+                    onConfirm={(instruction) => handleRegenerateScene(sc.scene_number, instruction)}
                     onCancel={() => setResyncScene(null)}
-                    busy={running !== null || regenTarget !== null}
+                    busy={running !== null}
                   />
                 )}
               </div>
@@ -551,97 +499,8 @@ export default function ProjectWorkspace() {
           {sortedScenes.length === 0 && (
             <div className="panel p-10 text-center text-sm text-bone-400">
               {stageStatus.scenes === "GENERATING"
-                ? "Planning your scenes…"
+                ? "Planning your scene prompts…"
                 : "No scenes yet."}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* VISUALS */}
-      {tab === "Visuals" && (
-        <div className="space-y-6">
-          {bible ? (
-            <section className="panel p-6">
-              <p className="label-xs mb-4">Project Visual Bible</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                {Object.entries(bible.data as VisualBible)
-                  .filter(([k]) => k !== "things_to_avoid")
-                  .map(([k, v]) => (
-                    <div key={k}>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-film">
-                        {k.replace(/_/g, " ")}
-                      </p>
-                      <p className="text-sm text-bone-300">{String(v)}</p>
-                    </div>
-                  ))}
-              </div>
-              <p className="label-xs mb-2 mt-6">Things to Avoid</p>
-              <ul className="space-y-1 text-sm text-bone-300">
-                {(bible.data as VisualBible).things_to_avoid.map((a, i) => (
-                  <li key={i}>• {a}</li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <div className="panel p-6 text-center text-sm text-bone-400">
-              Visual bible not generated yet.
-            </div>
-          )}
-          <section className="panel p-6">
-            <p className="label-xs mb-4">Visual Assets Checklist</p>
-            <div className="space-y-2">
-              {sortedScenes.map((s) => {
-                const sc = s.data as Scene;
-                return (
-                  <div key={s._id} className="flex items-center justify-between rounded-lg bg-ink-850 px-4 py-2.5 text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="w-16 font-mono text-xs text-bone-400">
-                        {fmt(sc.start_time)}
-                      </span>
-                      <span className="text-bone-200">{sc.visual_type.replace(/_/g, " ")}</span>
-                      {sc.graphics_required && (
-                        <span className="rounded bg-amber-film/10 px-1.5 py-0.5 text-[10px] text-amber-film">
-                          + {sc.graphic_type}
-                        </span>
-                      )}
-                    </div>
-                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                      PROMPT READY
-                    </span>
-                    <CopyButton text={`${sc.image_prompt}\n\n${sc.video_prompt}`} label="Prompts" />
-                  </div>
-                );
-              })}
-              {sortedScenes.length === 0 && (
-                <p className="text-sm text-bone-400">No scenes yet.</p>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* EDIT */}
-      {tab === "Edit" && (
-        <div className="space-y-2">
-          {editPlan ? (
-            (editPlan.data as EditingPlan).scenes.map((row) => (
-              <div key={row.scene} className="panel flex flex-wrap items-baseline gap-x-4 gap-y-1 p-4 text-sm">
-                <span className="font-mono text-xs text-amber-film">
-                  {fmt(row.start)}–{fmt(row.end)}
-                </span>
-                <span className="font-semibold text-bone-100">{row.visual}</span>
-                <span className="text-bone-300">{row.narration}</span>
-                <span className="ml-auto text-xs text-bone-400">
-                  {row.transition.replace(/_/g, " ")} · {row.audio}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="panel p-10 text-center text-sm text-bone-400">
-              {stageStatus.editing === "GENERATING"
-                ? "Assembling your edit plan…"
-                : "No editing plan yet."}
             </div>
           )}
         </div>
@@ -683,12 +542,9 @@ export default function ProjectWorkspace() {
                       story_type: project.story_type,
                       visual_style: project.visual_style,
                     },
-                    research: research?.data,
                     story: story?.data,
                     script: script?.data,
-                    visual_bible: bible?.data,
                     scenes: sortedScenes.map((s) => s.data),
-                    editing_plan: editPlan?.data,
                   };
                   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
                   const a = document.createElement("a");

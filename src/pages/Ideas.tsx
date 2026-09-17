@@ -59,7 +59,7 @@ export default function Ideas() {
       duration: 60,
       aspect_ratio: "9:16",
       language: "English",
-      scene_count: "auto",
+      scene_count: 8, // 60-sec free-Flow budget
       story_type: "auto",
     });
     navigate(`/project/${id}`);

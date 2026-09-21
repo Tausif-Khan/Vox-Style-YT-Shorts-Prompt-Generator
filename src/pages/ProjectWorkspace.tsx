@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Loader2,
   Pencil,
+  Lock,
 } from "lucide-react";
 
 const TABS = ["Story", "Script", "Scenes", "Export"] as const;
@@ -125,6 +126,19 @@ export default function ProjectWorkspace({
   const script = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "script" });
   const scenes = useQuery(api.stages.getScenesPublic, { projectId: id as any });
 
+  // Tabs unlock as their stage completes. Story is always open; Script unlocks
+  // once story is done, Scenes once script is done, Export once scenes are done.
+  const stageStatus = project?.stage_status as Record<ProjectStage, string> | undefined;
+  const unlocked: Record<Tab, boolean> = useMemo(() => {
+    const s = stageStatus;
+    return {
+      Story: true,
+      Script: !!s && (s.script === "COMPLETED" || s.script === "GENERATING" || s.script === "FAILED"),
+      Scenes: !!s && (s.scenes === "COMPLETED" || s.scenes === "GENERATING" || s.scenes === "FAILED"),
+      Export: !!s && s.scenes === "COMPLETED",
+    };
+  }, [stageStatus]);
+
   const sortedScenes = useMemo(
     () => [...(scenes ?? [])].sort((a, b) => a.scene_number - b.scene_number),
     [scenes]
@@ -137,8 +151,6 @@ export default function ProjectWorkspace({
       </div>
     );
   }
-
-  const stageStatus = project.stage_status as Record<ProjectStage, string>;
 
   const startEdit = (sceneNumber: number, narration: string) => {
     setEditingScene(sceneNumber);
@@ -232,7 +244,7 @@ export default function ProjectWorkspace({
               {running === s.key ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-film" />
               ) : (
-                <StageBadge status={stageStatus[s.key]} />
+                <StageBadge status={stageStatus![s.key]} />
               )}
               {s.label}
             </div>
@@ -250,19 +262,29 @@ export default function ProjectWorkspace({
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs — hidden tabs appear locked until their stage finishes */}
       <div className="mb-6 flex gap-1 border-b border-ink-700/80">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-3 text-sm font-medium transition-colors ${
-              tab === t ? "tab-active" : "text-bone-400 hover:text-bone-200"
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const isUnlocked = unlocked[t];
+          return (
+            <button
+              key={t}
+              onClick={() => isUnlocked && setTab(t)}
+              disabled={!isUnlocked}
+              title={isUnlocked ? undefined : "Unlocks when this step finishes generating"}
+              className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors ${
+                tab === t
+                  ? "tab-active"
+                  : isUnlocked
+                    ? "text-bone-400 hover:text-bone-200"
+                    : "cursor-not-allowed text-bone-400/30"
+              }`}
+            >
+              {!isUnlocked && <Lock className="h-3 w-3" />}
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {/* STORY */}
@@ -320,7 +342,7 @@ export default function ProjectWorkspace({
             </section>
           ) : (
             <div className="panel p-10 text-center text-sm text-bone-400">
-              {stageStatus.story === "GENERATING"
+              {stageStatus?.story === "GENERATING"
                 ? "Researching and building your story…"
                 : "No story yet. Click Story in the tracker above."}
             </div>
@@ -395,8 +417,8 @@ export default function ProjectWorkspace({
                       </div>
                       {scene && dirty && (
                         <p className="mt-2 text-xs text-bone-400/80">
-                          {scene.data.visual_type.replace(/_/g, " ")} visuals were planned for the
-                          original narration — replan them to match your edit.
+                          Visuals were planned for the original narration — replan
+                          them to match your edit.
                         </p>
                       )}
                     </>
@@ -408,7 +430,7 @@ export default function ProjectWorkspace({
             })
           ) : (
             <div className="panel p-10 text-center text-sm text-bone-400">
-              {stageStatus.script === "GENERATING"
+              {stageStatus?.script === "GENERATING"
                 ? "Writing your narration…"
                 : "No script yet. Regenerate from the Story tab once the story is ready."}
             </div>
@@ -440,16 +462,13 @@ export default function ProjectWorkspace({
                   <p className="scene-num">
                     SC {String(sc.scene_number).padStart(2, "0")} · {fmt(sc.start_time)}–{fmt(sc.end_time)}
                   </p>
-                  <span className="badge bg-amber-film/10 text-amber-film">
-                    {sc.visual_type.replace(/_/g, " ")}
-                  </span>
                 </div>
                 <p className="mb-4 border-b border-ink-700/80 pb-4 font-serif text-base leading-relaxed text-bone-100">
                   {sc.narration}
                 </p>
                 <p className="label-xs mb-1">Visual Goal</p>
                 <p className="mb-4 text-sm leading-relaxed text-bone-300">{sc.visual_goal}</p>
-                <div className="mb-4 grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <p className="label-xs">Image Prompt</p>
@@ -469,30 +488,6 @@ export default function ProjectWorkspace({
                     </p>
                   </div>
                 </div>
-                {(sc.graphics_required && sc.graphic_prompt) && (
-                  <div className="mb-4 rounded-lg border border-amber-film/20 bg-amber-film/5 p-3">
-                    <p className="label-xs mb-1">Graphic · {sc.graphic_type}</p>
-                    <p className="text-xs text-bone-300">{sc.graphic_prompt}</p>
-                    {sc.graphic_animation && (
-                      <p className="mt-1 text-xs text-bone-400">Animation: {sc.graphic_animation}</p>
-                    )}
-                    {sc.graphic_labels && sc.graphic_labels.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {sc.graphic_labels.map((l, i) => (
-                          <span key={i} className="rounded bg-ink-700 px-2 py-0.5 text-[10px] text-bone-200">
-                            {l}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-4 text-xs text-bone-400">
-                  {sc.on_screen_text && <span>Text: <span className="text-bone-200">{sc.on_screen_text}</span></span>}
-                  <span>Transition: <span className="text-bone-200">{sc.transition.replace(/_/g, " ")}</span></span>
-                  {sc.sound_effects && <span>SFX: <span className="text-bone-200">{sc.sound_effects}</span></span>}
-                  {sc.music_direction && <span>Music: <span className="text-bone-200">{sc.music_direction}</span></span>}
-                </div>
                 <div className="mt-4 flex items-center gap-2 border-t border-ink-700 pt-3">
                   <button className="btn-ghost" onClick={() => setRegenTarget(sc.scene_number)}>
                     <RefreshCw className="h-3.5 w-3.5" /> Regenerate Scene
@@ -500,7 +495,6 @@ export default function ProjectWorkspace({
                 </div>
                 {regenTarget === sc.scene_number && (
                   <SceneRegenPanel
-                    headline="Visuals were planned for the previous narration"
                     onConfirm={(instruction) => handleRegenerateScene(sc.scene_number, instruction)}
                     onCancel={() => setRegenTarget(null)}
                     busy={running !== null}
@@ -518,7 +512,7 @@ export default function ProjectWorkspace({
           })}
           {sortedScenes.length === 0 && (
             <div className="panel p-10 text-center text-sm text-bone-400">
-              {stageStatus.scenes === "GENERATING"
+              {stageStatus?.scenes === "GENERATING"
                 ? "Planning your scene prompts…"
                 : "No scenes yet."}
             </div>
@@ -607,14 +601,10 @@ export default function ProjectWorkspace({
                   lines.push("\n" + "".padEnd(50, "=") + "\nSCENE PROMPTS");
                   for (const s of sortedScenes) {
                     const sc = s.data as Scene;
-                    lines.push(`\n--- Scene ${sc.scene_number} (${fmt(sc.start_time)}–${fmt(sc.end_time)}) · ${sc.visual_type} ---`);
+                    lines.push(`\n--- Scene ${sc.scene_number} (${fmt(sc.start_time)}–${fmt(sc.end_time)}) ---`);
                     lines.push(`VISUAL GOAL: ${sc.visual_goal}`);
                     lines.push(`IMAGE: ${sc.image_prompt}`);
                     lines.push(`VIDEO: ${sc.video_prompt}`);
-                    if (sc.graphics_required && sc.graphic_prompt) lines.push(`GRAPHIC (${sc.graphic_type}): ${sc.graphic_prompt}`);
-                    if (sc.on_screen_text) lines.push(`ON-SCREEN TEXT: ${sc.on_screen_text}`);
-                    lines.push(`TRANSITION: ${sc.transition}`);
-                    lines.push(`AUDIO: ${sc.music_direction} | SFX: ${sc.sound_effects}`);
                   }
                   const blob = new Blob([lines.join("\n")], { type: "text/plain" });
                   const a = document.createElement("a");

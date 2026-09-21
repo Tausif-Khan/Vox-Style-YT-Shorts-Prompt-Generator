@@ -53,19 +53,35 @@ const FEATURES = [
 const FAQ = [
   {
     q: "Is Documentary Studio really free?",
-    a: "Yes. The tool is free to use — the site is supported by advertising. AI generation runs on a free DeepSeek model via TokenHarbor.",
+    a: "Yes. Provide your name and email and the full package is free — no credit card, no trial period, no limits on ideas.",
+  },
+  {
+    q: "Why do I need to provide my email?",
+    a: "Just your name and email — no password. It keeps the tool spam-free (temporary email addresses are blocked) and lets you pick up your recent projects on any visit.",
+  },
+  {
+    q: "What do you do with my email?",
+    a: "Nothing besides keeping your projects tied to you. No spam, no selling data, no password to leak — because none is ever stored.",
   },
   {
     q: "What do I get from one topic?",
     a: "A complete production package: story architecture, a timed script broken into scenes, and copy-paste-ready image + video prompts for Google Flow.",
   },
   {
-    q: "How many scenes per documentary?",
-    a: "Scenes are scaled to respect free Google Flow generation limits: 6 scenes for 30 seconds, 8 for 60 seconds, 10 for 90 seconds.",
+    q: "How long does generation take?",
+    a: "Usually 1–3 minutes for all three steps. Results appear as each step finishes — you can watch the progress bar while you wait.",
   },
   {
-    q: "Where do the prompts work best?",
-    a: "Google Flow (free tier supported). Image prompts are self-contained stills; video prompts describe motion only, ready to paste directly.",
+    q: "Do I need experience with video editing or AI?",
+    a: "No. Copy the prompts, paste them into Google Flow, and follow the four steps above. If you can copy-paste, you can make a short.",
+  },
+  {
+    q: "Can I edit or regenerate what it gives me?",
+    a: "Yes. Every step can be regenerated on its own, and each scene can be regenerated individually until it's right.",
+  },
+  {
+    q: "Can I use the videos I make commercially?",
+    a: "Yes — everything the tool produces (scripts, prompts, text) is yours to publish on your channels, monetized or not.",
   },
 ];
 
@@ -77,9 +93,16 @@ const fade = (delay: number) => ({
 
 const DURATIONS: DurationOption[] = [30, 60, 90];
 function resolveSceneCount(duration: number): number {
-  if (duration <= 30) return 6;
-  if (duration <= 60) return 8;
-  return 10;
+  // Sized so the full video fits a free Google Flow account's daily credits.
+  if (duration <= 30) return 4;
+  if (duration <= 60) return 6;
+  return 8;
+}
+
+function fmtDur(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
 }
 
 export default function Home() {
@@ -88,6 +111,54 @@ export default function Home() {
   const runPipeline = useAction(api.pipeline.startPipeline);
   const removeProject = useMutation(api.projects.remove);
   const projects = useQuery(api.projects.list, { userId }) ?? [];
+  const registerLead = useMutation(api.leads.register);
+
+  // Sign-in gate: name + email, stored locally (no passwords).
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [signInName, setSignInName] = useState("");
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInError, setSignInError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("docstudio_user");
+      if (raw) setUser(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleSignIn = async () => {
+    if (signingIn) return;
+    setSignInError("");
+    setSigningIn(true);
+    try {
+      const email = signInEmail.trim();
+      const name = signInName.trim();
+      if (!name) throw new Error("Please enter your name.");
+      // Client-side domain check for instant feedback; server re-validates.
+      const domain = email.toLowerCase().split("@")[1] ?? "";
+      const allowed = [
+        "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk", "yahoo.ca", "yahoo.de", "yahoo.fr",
+        "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com", "msn.com", "icloud.com", "me.com", "mac.com",
+        "aol.com", "proton.me", "protonmail.com", "gmx.com", "gmx.de", "mail.com", "zoho.com", "yandex.com", "yandex.ru", "rediffmail.com",
+      ];
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) || !allowed.includes(domain)) {
+        throw new Error(
+          "Please use an email address from a well-known provider (Gmail, Yahoo, Hotmail/Outlook, iCloud, etc.)."
+        );
+      }
+      await registerLead({ name, email });
+      const session = { name, email: email.toLowerCase() };
+      localStorage.setItem("docstudio_user", JSON.stringify(session));
+      setUser(session);
+    } catch (err) {
+      setSignInError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const [topic, setTopic] = useState("");
   const [duration, setDuration] = useState<DurationOption>(60);
@@ -114,6 +185,14 @@ export default function Home() {
   const generating =
     submitting || (activeId !== null && (anyGenerating || (progress < 100 && !anyFailed && stages !== undefined)));
   const [justStarted, setJustStarted] = useState(false);
+
+  // Live elapsed timer for the end-to-end pipeline run.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [generating]);
 
   // Scroll the progress card into view when a generation kicks off.
   useEffect(() => {
@@ -195,19 +274,8 @@ export default function Home() {
             aria-hidden
             className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-[#7dd3c8]/[0.09] blur-[130px]"
           />
-          <motion.div
-            {...fade(0)}
-            className="mb-7 flex items-center gap-2.5 rounded-full border border-ink-600/80 bg-ink-900/70 px-4 py-1.5 backdrop-blur"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-film opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-film" />
-            </span>
-            <span className="label-xs">Free AI Editorial Production System</span>
-          </motion.div>
-
           <motion.h1
-            {...fade(0.08)}
+            {...fade(0)}
             className="max-w-5xl font-serif text-5xl font-bold leading-[1.05] tracking-tight text-bone-50 md:text-7xl"
           >
             One topic.
@@ -219,31 +287,92 @@ export default function Home() {
             {...fade(0.16)}
             className="mt-6 max-w-xl text-lg leading-relaxed text-bone-300"
           >
-            Free tool, no sign-up. Get the story, the timed script, and Flow-ready
-            image + video prompts — everything you need for a cinematic editorial short.
+            Free tool. Share your name and email, then get the story, the timed
+            script, and Flow-ready image + video prompts — everything you need for a
+            cinematic editorial short.
           </motion.p>
 
           {/* ── THE GENERATOR (tool section) ── */}
           <section id="generator" className="w-full scroll-mt-24 pt-14">
-            <div className="panel relative mx-auto max-w-2xl overflow-hidden p-6 text-left">
-              <div
-                aria-hidden
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
-              />
-              <label className="label-xs relative mb-3 block">Your topic</label>
-              <textarea
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="The History of Pizza"
-                rows={2}
-                className="input-dark relative resize-none font-serif text-xl leading-relaxed"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void submit();
-                  }
-                }}
-              />
+            {!user ? (
+              /* ── Sign-in gate ── */
+              <div className="panel relative mx-auto max-w-md overflow-hidden p-6 text-left">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+                />
+                <h2 className="relative mb-1 font-serif text-2xl text-bone-50">Start creating</h2>
+                <p className="relative mb-5 text-sm leading-relaxed text-bone-300">
+                  Free forever — just your name and email. No password, ever.
+                </p>
+                <label className="label-xs relative mb-2 block">Your name</label>
+                <input
+                  value={signInName}
+                  onChange={(e) => setSignInName(e.target.value)}
+                  placeholder="Jane Creator"
+                  className="input-dark relative mb-4 w-full"
+                  maxLength={80}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSignIn();
+                  }}
+                />
+                <label className="label-xs relative mb-2 block">Email address</label>
+                <input
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                  placeholder="you@gmail.com"
+                  type="email"
+                  className="input-dark relative mb-1 w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void handleSignIn();
+                  }}
+                />
+                <p className="relative mb-4 text-[11px] leading-relaxed text-bone-400/80">
+                  Gmail, Yahoo, Hotmail/Outlook, iCloud or other major providers —
+                  temporary email addresses are blocked.
+                </p>
+                {signInError && (
+                  <p className="relative mb-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+                    {signInError}
+                  </p>
+                )}
+                <button
+                  className="btn-primary relative h-12 w-full text-base"
+                  disabled={signingIn}
+                  onClick={() => void handleSignIn()}
+                >
+                  {signingIn ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" /> Start creating
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              /* ── The generator (unlocked) ── */
+              <div className="panel relative mx-auto max-w-2xl overflow-hidden p-6 text-left">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+                />
+                <label className="label-xs relative mb-3 block">Your topic</label>
+                <textarea
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="The History of Pizza"
+                  rows={2}
+                  className="input-dark relative resize-none font-serif text-xl leading-relaxed"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void submit();
+                    }
+                  }}
+                />
 
               <div className="relative mt-5 flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -285,10 +414,11 @@ export default function Home() {
                 </button>
               </div>
               <p className="relative mt-4 text-xs text-bone-400/80">
-                Scenes stay lean to respect free Google Flow generation limits —{" "}
-                {resolveSceneCount(duration)} prompts for {duration} sec.
+                Sized for Google Flow's free plan — {resolveSceneCount(duration)} papercut scenes
+                on Veo Light leaves daily credits to spare.
               </p>
-            </div>
+              </div>
+            )}
 
             {/* Live pipeline progress — visible while generating */}
             {activeId && generating && (
@@ -316,7 +446,11 @@ export default function Home() {
                   })}
                 </div>
                 <p className="mt-3 text-center text-[11px] text-bone-400/80">
-                  This usually takes 1–3 minutes — you can scroll below, results appear as each step finishes.
+                  {activeProject?.pipeline_completed_at && activeProject?.pipeline_started_at
+                    ? `Pipeline finished in ${fmtDur(activeProject.pipeline_completed_at - activeProject.pipeline_started_at)}.`
+                    : activeProject?.pipeline_started_at
+                      ? `${fmtDur(nowTick - activeProject.pipeline_started_at)} elapsed — results appear as each step finishes.`
+                      : "This usually takes 1–3 minutes — you can scroll below, results appear as each step finishes."}
                 </p>
               </div>
             )}
@@ -357,11 +491,9 @@ export default function Home() {
       {/* Recent projects */}
       {projects.length > 0 && (
         <div className="mx-auto max-w-6xl px-6 pb-4">
-          <div className="mb-5 flex items-end justify-between">
-            <div>
-              <p className="label-xs mb-2">Your Projects</p>
-              <h2 className="font-serif text-3xl text-bone-50">Pick up where you left off</h2>
-            </div>
+          <div className="mb-5 text-center">
+            <p className="label-xs mb-2">Your Projects</p>
+            <h2 className="font-serif text-3xl text-bone-50">Pick up where you left off</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {projects.slice(0, 6).map((p) => (
@@ -395,14 +527,82 @@ export default function Home() {
         </div>
       )}
 
-      {/* In-content ad */}
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      {/* ── HOW TO USE IN GOOGLE FLOW ── (between the two ad blocks) */}
+      <div id="how-to-flow" className="mx-auto max-w-6xl scroll-mt-24 px-6 pb-8">
+        <div className="mb-10 max-w-2xl mx-auto text-center">
+          <p className="label-xs mb-3">From Prompts to Video</p>
+          <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
+            Turn your prompts into a finished short — <span className="italic text-amber-film">in Google Flow.</span>
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-bone-300">
+            Every scene is a VOX-style paper cut animation, built for Google Flow's free
+            plan. Here is the exact workflow, scene by scene:
+          </p>
+        </div>
+        <ol className="grid gap-4 md:grid-cols-2">
+          {[
+            {
+              icon: Copy,
+              title: "1 · Copy a scene's prompts",
+              body: "Open the Scenes tab (or Export for everything at once). Each scene card has a one-tap Copy button for its image prompt and video prompt.",
+            },
+            {
+              icon: Image,
+              title: "2 · Generate the image (nano banana)",
+              body: "At labs.google/flow, start a new project and set the aspect ratio to 9:16. Click on the image and select the nano banana model, then paste the image prompt and generate. This is your scene's opening frame.",
+            },
+            {
+              icon: Video,
+              title: "3 · Turn the frame into a video (Veo Light)",
+              body: "Add your generated still as an ingredient or frame in a new Flow shot. Select the frame, pick the Veo Light model, paste the video prompt, and generate. At ~5 credits per clip, a 6-scene short costs about 30 of your ~50 daily free credits — leaving room for retries.",
+            },
+            {
+              icon: Clapperboard,
+              title: "4 · Assemble & voice it",
+              body: "Repeat for each scene, then stitch the clips in any editor (CapCut works). Record the narration from the Script tab and export.",
+            },
+          ].map((step, i) => (
+            <motion.li
+              key={step.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.5, delay: (i % 2) * 0.08 }}
+              className="panel panel-hover relative overflow-hidden p-7"
+            >
+              <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
+                <step.icon className="h-5 w-5 text-amber-film" strokeWidth={1.75} />
+              </span>
+              <h3 className="mb-2 font-serif text-xl text-bone-50">{step.title}</h3>
+              <p className="relative text-sm leading-relaxed text-bone-300">{step.body}</p>
+            </motion.li>
+          ))}
+        </ol>
+        <div className="panel-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
+          <p className="text-sm leading-relaxed text-bone-300">
+            <span className="font-semibold text-bone-100">Free-account tip:</span>{" "}
+            generate your stills first — they cost fewer credits than video. Scene counts (4–8)
+            are sized so a full papercut short on Veo Light fits within Flow's ~50 free daily credits.
+          </p>
+          <a
+            href="https://labs.google/flow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary shrink-0"
+          >
+            Open Google Flow <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
+      </div>
+
+      {/* In-content ad (between the guide and the system section) */}
+      <div className="mx-auto max-w-6xl px-6 pb-24">
         <AdSlot className="w-full" minHeight={110} />
       </div>
 
       {/* Features */}
       <div className="mx-auto max-w-6xl px-6 pb-24">
-        <div className="mb-14 max-w-2xl">
+        <div className="mb-14 max-w-2xl mx-auto text-center">
           <p className="label-xs mb-3">The System</p>
           <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
             An AI production team, <span className="italic text-amber-film">on demand.</span>
@@ -427,83 +627,14 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Ad between features and FAQ */}
+        {/* In-content ad (below recent projects) */}
         <AdSlot className="mt-14 w-full" minHeight={110} />
       </div>
 
-      {/* ── HOW TO USE IN GOOGLE FLOW ── */}
-      <div id="how-to-flow" className="mx-auto max-w-6xl scroll-mt-24 px-6 pb-24">
-        <div className="mb-10 max-w-2xl">
-          <p className="label-xs mb-3">From Prompts to Video</p>
-          <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
-            Turn your prompts into a finished short — <span className="italic text-amber-film">in Google Flow.</span>
-          </h2>
-          <p className="mt-4 text-sm leading-relaxed text-bone-300">
-            Every scene in the Scenes tab is built for Google Flow (free accounts work great).
-            Here is the exact workflow, scene by scene:
-          </p>
-        </div>
-        <ol className="grid gap-4 md:grid-cols-2">
-          {[
-            {
-              icon: Copy,
-              title: "1 · Copy a scene's prompts",
-              body: "Open the Scenes tab (or Export for everything at once). Each scene card has a one-tap Copy button for its image prompt and video prompt.",
-            },
-            {
-              icon: Image,
-              title: "2 · Create the still in Flow",
-              body: "At labs.google/flow, start a new project, set the aspect ratio to 9:16, and paste the image prompt into Text-to-Image. This is your scene's opening frame.",
-            },
-            {
-              icon: Video,
-              title: "3 · Animate it with the video prompt",
-              body: "Use Flow's Frames-to-Video with the still you just made, then paste the video prompt. It describes motion only — camera drifts, flickers, movement — which is exactly what Flow wants.",
-            },
-            {
-              icon: Clapperboard,
-              title: "4 · Assemble & voice it",
-              body: "Repeat for each scene, then stitch the clips in any editor (CapCut works). Record the narration from the Script tab, add the on-screen text and sound notes from each scene card, and export.",
-            },
-          ].map((step, i) => (
-            <motion.li
-              key={step.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.5, delay: (i % 2) * 0.08 }}
-              className="panel panel-hover relative overflow-hidden p-7"
-            >
-              <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-                <step.icon className="h-5 w-5 text-amber-film" strokeWidth={1.75} />
-              </span>
-              <h3 className="mb-2 font-serif text-xl text-bone-50">{step.title}</h3>
-              <p className="relative text-sm leading-relaxed text-bone-300">{step.body}</p>
-            </motion.li>
-          ))}
-        </ol>
-        <div className="panel-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
-          <p className="text-sm leading-relaxed text-bone-300">
-            <span className="font-semibold text-bone-100">Free-account tip:</span>{" "}
-            generate your stills first — they cost fewer credits than video. Our scene counts (6–10)
-            are sized so a full documentary fits comfortably within Flow's free daily generations.
-          </p>
-          <a
-            href="https://labs.google/flow"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-secondary shrink-0"
-          >
-            Open Google Flow <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </div>
-      </div>
 
-      {/* FAQ */}
       <div className="mx-auto max-w-3xl px-6 pb-24">
         <p className="label-xs mb-3 text-center">Questions</p>
-        <h2 className="mb-10 text-center font-serif text-4xl text-bone-50">FAQ</h2>
-        <div className="space-y-3">
+        <h2 className="mb-10 text-center font-serif text-4xl text-bone-50">FAQ</h2>        <div className="space-y-3">
           {FAQ.map((f) => (
             <details key={f.q} className="panel group p-5">
               <summary className="cursor-pointer list-none font-serif text-lg text-bone-50 marker:hidden">
@@ -525,7 +656,7 @@ export default function Home() {
             Documentary Studio — Free AI Editorial Explainer
           </span>
           <span className="text-xs text-bone-400/60">
-            Supported by advertising · V2.0
+            Free forever · V2.0
           </span>
         </div>
       </footer>

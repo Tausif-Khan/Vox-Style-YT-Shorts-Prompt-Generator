@@ -10,9 +10,9 @@ const DURATIONS: DurationOption[] = [30, 60, 90];
 
 /** ponytail: mirror of server-side resolveSceneCount — resolve "auto" to the free-Flow budget. */
 function resolveSceneCount(duration: number): number {
-  if (duration <= 30) return 6;
-  if (duration <= 60) return 8;
-  return 10;
+  if (duration <= 30) return 4;
+  if (duration <= 60) return 6;
+  return 8;
 }
 
 export default function NewProject() {

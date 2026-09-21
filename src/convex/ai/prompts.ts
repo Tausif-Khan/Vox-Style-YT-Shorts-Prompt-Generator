@@ -1,37 +1,29 @@
 /**
  * Server-side prompt system. Prompts never live in UI code.
  * 3-stage pipeline: story (research+story merged), script, scenes.
+ *
+ * Visual style: VOX-style PAPER CUT animation (layered paper collage,
+ * stop-motion feel). Every scene's prompts are built for Google Flow.
  */
 
 export const PROMPT_VERSIONS = {
-  story: "story_v2",
-  script: "script_v2",
-  scene_planner: "scene_planner_v2",
+  story: "story_v3",
+  script: "script_v3",
+  scene_planner: "papercut_scene_v1",
 } as const;
 
-const VISUAL_TYPE_GUIDANCE = `
-Choose the BEST communication method per scene. Never default to cinematic footage for everything.
-Types: CINEMATIC_FOOTAGE, HISTORICAL_RECREATION, ARCHIVAL_STYLE, MACRO_DETAIL, AERIAL, MAP, TIMELINE, DIAGRAM, DATA_GRAPHIC, OBJECT_FOCUS, PORTRAIT, PROCESS, COMPARISON, MODERN_FOOTAGE, TEXT_GRAPHIC.
-Guidance:
-- Geography, migration, spread → MAP
-- Chronology spanning decades/centuries → TIMELINE
-- Physical small object or mechanism → MACRO_DETAIL or OBJECT_FOCUS
-- Single person central to the story → PORTRAIT
-- Step-by-step mechanism → PROCESS or DIAGRAM
-- Numbers, prices, quantities → DATA_GRAPHIC
-- Two things contrasted → COMPARISON
-- Everyday modern life proof → MODERN_FOOTAGE
-- Before photography era → HISTORICAL_RECREATION
-- Post-photography historical moments → ARCHIVAL_STYLE
-Use variety. Two adjacent scenes should rarely share a visual type.
-`.trim();
-
+/**
+ * Google Flow budget rules — tuned so a full video fits a FREE account's
+ * daily credits (~50/day). Veo 3 costs ~20 credits/clip; Veo 3 Fast ~5.
+ * 6 scenes → ~30 credits with Veo 3 Fast, leaving room for regenerations.
+ */
 const FLOW_BUDGET_RULES = `
-GOOGLE FLOW BUDGET RULES (user has a free account with limited generations):
-- Keep the total number of scenes LOW (given by the caller). Every scene = one video generation.
-- Prefer one strong shot per scene over coverage. Never plan B-rolls or extra angles.
-- Default to footage that works as a still image too: image_prompt is the anchor frame, video_prompt animates it.
-- Only require graphics (graphics_required=true) when a map, timeline or data graphic is genuinely necessary — each is an extra asset.
+GOOGLE FLOW FREE-ACCOUNT BUDGET RULES (hard constraints):
+- The user has a FREE Google Flow account with roughly 50 credits per day.
+- RECOMMENDED MODEL FOR THE USER: Veo 3 Fast (default in Flow). It costs about 5 credits per video clip; the premium Veo 3 costs about 20.
+- Scene count is FIXED by the caller (4-8 scenes). Each scene = exactly ONE video clip (~8s). One clip per scene, never B-rolls or extra angles.
+- Budget math must work: 6 clips x ~5 credits = ~30 credits, leaving ~20 credits of headroom for retries within the daily free allowance.
+- Every scene must be producible as: ONE still image (Text-to-Image) + ONE video (Frames-to-Video animating that still). Never require more than one generation per step.
 `.trim();
 
 export const STORY_TYPE_GUIDANCE: Record<string, string> = {
@@ -56,7 +48,7 @@ export const storyPrompt = (opts: {
   guidance: string;
   custom?: string;
 }) => `
-You are the research desk and story architect of a premium editorial documentary studio, in one pass.
+You are the research desk and story architect of a premium documentary studio, in one pass.
 
 TOPIC: ${opts.topic}
 STORY TYPE: ${opts.storyType}
@@ -79,7 +71,7 @@ export const scriptPrompt = (opts: {
   duration: number;
   sceneCount: number;
 }) => `
-You are the scriptwriter of a premium editorial documentary studio.
+You are the scriptwriter of a premium documentary studio.
 
 STORY ARCHITECTURE:
 ${opts.story}
@@ -96,12 +88,24 @@ RULES:
 Return JSON only. total_word_count = actual word count of all narration combined; estimated_duration = ${opts.duration}.
 `.trim();
 
+const PAPERCUT_STYLE_BIBLE = `
+STYLE BIBLE — VOX-STYLE PAPER CUT ANIMATION (every prompt inherits this, non-negotiable):
+The visual language is layered paper cutout collage, like classic VOX explainer videos:
+- Everything in frame looks CUT FROM PAPER: flat colored paper shapes with visible white torn/deckled edges, subtle drop shadows between layers, slight hand-made imperfection.
+- Collage composition: characters, objects and buildings are simplified iconic paper cutouts arranged on a textured paper background (kraft paper, old map paper, or plain card stock).
+- Optional mixed-media accents: paper labels, printed ephemera snippets, stamped textures, string-and-pushpin details — all rendered as paper.
+- Faces are simplified (no photorealistic features); if a face is shown it is stylized, minimal, papercraft.
+- Depth comes from stacked paper layers and shadows, NOT from photographic perspective or lens blur.
+- Lighting is even and flat (studio light on a paper set) — no dramatic cinematic lighting, no lens flare, no photorealism, no 3D render look, no anime, no watercolor.
+- In the VIDEO prompt, motion should feel like stop-motion paper animation: elements slide/slide/rise/settle in steps, layers shift with parallax, paper pieces rotate slightly, hands-off mechanical ease. No morphing, no fluid camera work.
+`.trim();
+
 export const scenePlannerPrompt = (opts: {
   story: string;
   scriptSections: string;
   aspectRatio: string;
 }) => `
-You are the scene planner of a premium editorial documentary studio.
+You are the scene planner of a premium documentary studio producing a VOX-style paper cut animation short for Google Flow.
 
 STORY ARCHITECTURE (for tone and continuity):
 ${opts.story}
@@ -109,24 +113,20 @@ ${opts.story}
 SCRIPT SECTIONS (narration and timings are fixed — do not rewrite them):
 ${opts.scriptSections}
 
-STYLE BIBLE (every prompt inherits this): premium editorial documentary. Photorealistic, physically believable, real materials. Naturalistic cinematic lighting, restrained editorial color palette, tactile texture. Period-appropriate architecture, clothing, objects for historical scenes. Avoid: baked-in text overlays, logos, modern objects in historical scenes, anatomy errors, glossy AI sheen.
-
-${VISUAL_TYPE_GUIDANCE}
+${PAPERCUT_STYLE_BIBLE}
 
 ${FLOW_BUDGET_RULES}
 
 ASPECT RATIO: ${opts.aspectRatio} — compose frames for this shape.
 
-For EACH script section produce one scene with the same scene_number, start_time, end_time and narration.
+For EACH script section produce exactly ONE scene object with the same scene_number, start_time, end_time and narration.
+Each scene object contains ONLY these fields — nothing else:
+- scene_number, start_time, end_time, duration, narration (copy from the script section).
 - visual_goal: what the viewer should understand from this frame, one sentence.
-- image_prompt: self-contained still-image prompt. Structure: SUBJECT + CONTEXT + ENVIRONMENT + (CHARACTERS + WARDROBE if any) + OBJECTS + COMPOSITION + CAMERA + LENS + LIGHTING + TEXTURE + REALISM + AVOIDANCES. 60-120 words. Explicitly forbid baked-in text/logos and anachronisms relevant to the period.
-- video_prompt: MOTION ONLY. Never restate the still composition. Structure: SUBJECT MOVEMENT + ENVIRONMENTAL MOVEMENT + CAMERA MOVEMENT + FOCUS BEHAVIOR + PACING + PHYSICAL REALISM. 40-80 words. One camera move maximum; no slow motion unless meaningful.
-- graphics_required: true only when a graphic communicates better than footage (maps, timelines, data). graphic_type: MAP | TIMELINE | FLOW_DIAGRAM | DATA_VISUALIZATION | COMPARISON | LABELED_OBJECT | STATISTIC | TEXT_REVEAL | PROCESS_DIAGRAM. graphic_prompt: full spec. graphic_animation: how it animates. graphic_labels: on-screen labels.
-- on_screen_text: maximum 4-6 words, ONLY if it improves comprehension (location, date). Often empty.
-- transition: how this scene hands off to the next. HARD_CUT | MATCH_CUT | MAP_MORPH | OBJECT_MATCH | WHIP_PAN | DISSOLVE | PUSH_IN | GRAPHIC_TRANSITION | ARCHIVAL_TO_MODERN. Last scene use HARD_CUT.
-- sound_effects: 1-3 concrete diegetic sounds. music_direction: mood + intensity arc. narration_emphasis: word/phrase to stress, if any. ambient: environmental bed, if any.
-- continuity_notes: how this scene matches neighbors (palette, location, subject).
-Return JSON only: { "scenes": [ ... ] }.
+- image_prompt: the still frame, cut-from-paper collage style. Structure in one flowing paragraph: what is shown as paper cutouts (subject + supporting pieces) → the paper background it sits on → arrangement/depth (which layer overlaps which) → texture details (torn edges, paper grain, drop shadows) → flat even lighting → end with "paper cutout collage style, stop-motion papercraft, textured paper, ${opts.aspectRatio}". Self-contained: someone pasting it into Flow's Text-to-Image needs nothing else. 50-90 words. No real photography terms (no lens, no bokeh, no cinematic lighting).
+- video_prompt: motion ONLY, animating that paper still, as a stop-motion paper animation. Structure in one short paragraph: which paper elements move and how (slide in, rise up, rotate slightly, stack) → paper-layer parallax → gentle push-in or drift if any (one move maximum) → end with "stop-motion paper animation, smooth stepped motion, ${opts.aspectRatio}". 30-60 words. Never restate the composition. No sound, no music, no text.
+
+Return JSON only: { "scenes": [ { scene_number, start_time, end_time, duration, narration, visual_goal, image_prompt, video_prompt } ] } — the scenes array must contain one object per script section, in order, with NO additional fields.
 `.trim();
 
 export const regenerateScenePrompt = (opts: {
@@ -134,7 +134,7 @@ export const regenerateScenePrompt = (opts: {
   instruction?: string;
   neighbors: string;
 }) => `
-You are regenerating ONE scene of a premium editorial documentary.
+You are regenerating ONE scene of a VOX-style paper cut animation documentary.
 
 CURRENT SCENE:
 ${opts.scene}
@@ -144,9 +144,10 @@ ${opts.neighbors}
 
 ${opts.instruction ? `USER INSTRUCTION (highest priority): ${opts.instruction}` : ""}
 
+${PAPERCUT_STYLE_BIBLE}
+
 Rewrite this scene to a higher standard. Keep scene_number, start_time, end_time and narration unchanged.
-Style bible: premium editorial documentary. Photorealistic, naturalistic lighting, restrained palette, period-accurate. Avoid baked-in text, logos, anachronisms, anatomy errors.
-${VISUAL_TYPE_GUIDANCE}
-image_prompt is a self-contained still prompt (subject, environment, period detail, composition, camera, lens, lighting, texture, realism, avoidances); video_prompt describes motion only, never restating composition.
-Return JSON only: a single scene object.
+Return JSON only: a single scene object with ONLY these fields: scene_number, start_time, end_time, duration, narration, visual_goal, image_prompt, video_prompt.
+- image_prompt: still frame as a layered paper cutout collage (cut paper shapes, torn edges, drop shadows, textured paper background, flat even lighting), ending with "paper cutout collage style, stop-motion papercraft".
+- video_prompt: motion only, as stop-motion paper animation (sliding/rising/rotating paper pieces, layer parallax, one gentle camera move max), never restating the composition.
 `.trim();

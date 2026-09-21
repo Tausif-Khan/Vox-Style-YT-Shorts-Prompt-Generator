@@ -42,20 +42,20 @@ async function callAI(
   });
 }
 
-/** Validate + normalize a scene object. */
+/** Validate + normalize a scene object (lean papercut shape). */
 function normalizeScene(raw: any, fallbackNarration = "") {
   const parsed = sceneSchema.safeParse(raw);
   if (!parsed.success) throw new Error(`Scene validation failed: ${parsed.error.message}`);
-  const s = parsed.data;
+  const s = parsed.data as any;
   return {
-    ...s,
+    scene_number: s.scene_number,
+    start_time: s.start_time,
+    end_time: s.end_time,
+    duration: s.duration,
     narration: s.narration || fallbackNarration,
-    graphic_type: s.graphic_type ?? "",
-    graphic_prompt: s.graphic_prompt ?? "",
-    graphic_animation: s.graphic_animation ?? "",
-    graphic_labels: s.graphic_labels ?? [],
-    narration_emphasis: s.narration_emphasis ?? "",
-    ambient: s.ambient ?? "",
+    visual_goal: s.visual_goal,
+    image_prompt: s.image_prompt,
+    video_prompt: s.video_prompt,
     status: "draft" as const,
     asset_status: "PROMPT_READY" as const,
   };
@@ -208,7 +208,7 @@ export const regenerateScene = internalAction({
     const neighbors = (scenes as any[])
       .filter((s) => Math.abs(s.scene_number - args.sceneNumber) === 1)
       .sort((a, b) => a.scene_number - b.scene_number)
-      .map((s) => `Scene ${s.scene_number}: ${s.data.visual_type} — ${s.data.visual_goal}`)
+      .map((s) => `Scene ${s.scene_number}: ${s.data.visual_goal}`)
       .join("\n");
 
     const raw = await callAI(

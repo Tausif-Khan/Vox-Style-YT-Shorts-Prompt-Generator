@@ -5,37 +5,31 @@
 
 const S = { type: "STRING" } as const;
 const N = { type: "NUMBER" } as const;
-const B = { type: "BOOLEAN" } as const;
 const strArr = { type: "ARRAY", items: S } as const;
 
-const TRANSITIONS = [
-  "HARD_CUT",
-  "MATCH_CUT",
-  "MAP_MORPH",
-  "OBJECT_MATCH",
-  "WHIP_PAN",
-  "DISSOLVE",
-  "PUSH_IN",
-  "GRAPHIC_TRANSITION",
-  "ARCHIVAL_TO_MODERN",
-] as const;
-
-const VISUALS = [
-  "CINEMATIC_FOOTAGE",
-  "HISTORICAL_RECREATION",
-  "ARCHIVAL_STYLE",
-  "MACRO_DETAIL",
-  "AERIAL",
-  "MAP",
-  "TIMELINE",
-  "DIAGRAM",
-  "DATA_GRAPHIC",
-  "OBJECT_FOCUS",
-  "PORTRAIT",
-  "PROCESS",
-  "COMPARISON",
-  "MODERN_FOOTAGE",
-  "TEXT_GRAPHIC",
+/**
+ * Lean scene contract for the papercut pipeline: only the fields the user
+ * actually pastes into Google Flow. Nothing else is requested or stored.
+ */
+const sceneProps = {
+  scene_number: N,
+  start_time: N,
+  end_time: N,
+  duration: N,
+  narration: S,
+  visual_goal: S,
+  image_prompt: S,
+  video_prompt: S,
+} as const;
+const sceneRequired = [
+  "scene_number",
+  "start_time",
+  "end_time",
+  "duration",
+  "narration",
+  "visual_goal",
+  "image_prompt",
+  "video_prompt",
 ] as const;
 
 export const geminiSchemas = {
@@ -97,46 +91,8 @@ export const geminiSchemas = {
         type: "ARRAY",
         items: {
           type: "OBJECT",
-          properties: {
-            scene_number: N,
-            start_time: N,
-            end_time: N,
-            duration: N,
-            narration: S,
-            visual_goal: S,
-            visual_type: { type: "STRING", enum: [...VISUALS] },
-            image_prompt: S,
-            video_prompt: S,
-            graphics_required: B,
-            graphic_type: S,
-            graphic_prompt: S,
-            graphic_animation: S,
-            graphic_labels: strArr,
-            on_screen_text: S,
-            transition: { type: "STRING", enum: [...TRANSITIONS] },
-            sound_effects: S,
-            music_direction: S,
-            narration_emphasis: S,
-            ambient: S,
-            continuity_notes: S,
-          },
-          required: [
-            "scene_number",
-            "start_time",
-            "end_time",
-            "duration",
-            "narration",
-            "visual_goal",
-            "visual_type",
-            "image_prompt",
-            "video_prompt",
-            "graphics_required",
-            "on_screen_text",
-            "transition",
-            "sound_effects",
-            "music_direction",
-            "continuity_notes",
-          ],
+          properties: sceneProps,
+          required: [...sceneRequired],
         },
       },
     },
@@ -145,45 +101,7 @@ export const geminiSchemas = {
 
   scene: {
     type: "OBJECT",
-    properties: {
-      scene_number: N,
-      start_time: N,
-      end_time: N,
-      duration: N,
-      narration: S,
-      visual_goal: S,
-      visual_type: { type: "STRING", enum: [...VISUALS] },
-      image_prompt: S,
-      video_prompt: S,
-      graphics_required: B,
-      graphic_type: S,
-      graphic_prompt: S,
-      graphic_animation: S,
-      graphic_labels: strArr,
-      on_screen_text: S,
-      transition: { type: "STRING", enum: [...TRANSITIONS] },
-      sound_effects: S,
-      music_direction: S,
-      narration_emphasis: S,
-      ambient: S,
-      continuity_notes: S,
-    },
-    required: [
-      "scene_number",
-      "start_time",
-      "end_time",
-      "duration",
-      "narration",
-      "visual_goal",
-      "visual_type",
-      "image_prompt",
-      "video_prompt",
-      "graphics_required",
-      "on_screen_text",
-      "transition",
-      "sound_effects",
-      "music_direction",
-      "continuity_notes",
-    ],
+    properties: sceneProps,
+    required: [...sceneRequired],
   },
 };

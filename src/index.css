@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted fonts (Inter + Inter Tight, SIL OFL). No third-party font CDN
+   requests — visitor IPs are never shared with Google Fonts. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-var.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/inter-tight-latin.woff2") format("woff2");
+}
+
 :root {
   color-scheme: dark;
   --glass-line: rgba(255, 255, 255, 0.2);

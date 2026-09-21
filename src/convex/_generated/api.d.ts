@@ -15,6 +15,8 @@ import type * as ai_provider from "../ai/provider.js";
 import type * as editing from "../editing.js";
 import type * as generation from "../generation.js";
 import type * as ideas from "../ideas.js";
+import type * as leads from "../leads.js";
+import type * as leadsAdmin from "../leadsAdmin.js";
 import type * as pipeline from "../pipeline.js";
 import type * as projects from "../projects.js";
 import type * as stages from "../stages.js";
@@ -33,6 +35,8 @@ declare const fullApi: ApiFromModules<{
   editing: typeof editing;
   generation: typeof generation;
   ideas: typeof ideas;
+  leads: typeof leads;
+  leadsAdmin: typeof leadsAdmin;
   pipeline: typeof pipeline;
   projects: typeof projects;
   stages: typeof stages;

@@ -78,6 +78,16 @@ export const remove = mutation({
   },
 });
 
+export const setPipelineStarted = internalMutation({
+  args: { id: v.id("projects") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      pipeline_started_at: Date.now(),
+      pipeline_completed_at: undefined,
+    });
+  },
+});
+
 export const setStageStatus = internalMutation({
   args: {
     id: v.id("projects"),
@@ -105,6 +115,10 @@ export const setStageStatus = internalMutation({
       stage_status,
       status,
       last_error: args.error ?? (args.status === "COMPLETED" ? undefined : project.last_error),
+      // When the last stage completes, stamp the end-to-end pipeline time.
+      ...(allDone && !project.pipeline_completed_at
+        ? { pipeline_completed_at: Date.now() }
+        : {}),
     });
   },
 });

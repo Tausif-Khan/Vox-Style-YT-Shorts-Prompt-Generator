@@ -12,6 +12,8 @@ export const startPipeline = action({
   handler: async (ctx, args) => {
     const stages = ["story", "script", "scenes"] as const;
     let lastError: unknown = null;
+    // Stamp the run start once, so the UI can show elapsed / total time.
+    await ctx.runMutation(internal.projects.setPipelineStarted, { id: args.projectId });
     for (const stage of stages) {
       const project = await ctx.runQuery(internal.projects.getProjectInternal, {
         id: args.projectId,

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { VISUAL_TYPES, TRANSITION_TYPES } from "./types";
 
 export const storySchema = z.object({
   central_question: z.string().min(1),
@@ -26,30 +25,44 @@ export const scriptSchema = z.object({
   sections: z.array(scriptSectionSchema).min(1),
 });
 
-export const sceneSchema = z.object({
+// Lean paper-cut scene: only what the user pastes into Google Flow.
+// Legacy fields are tolerated on input but stripped from stored data.
+export const sceneCoreSchema = z.object({
   scene_number: z.number().int().positive(),
   start_time: z.number().nonnegative(),
   end_time: z.number().positive(),
   duration: z.number().positive(),
   narration: z.string(),
   visual_goal: z.string().min(1),
-  visual_type: z.enum(VISUAL_TYPES),
   image_prompt: z.string().min(1),
   video_prompt: z.string().min(1),
-  graphics_required: z.boolean(),
-  graphic_type: z.string().optional().nullable(),
-  graphic_prompt: z.string().optional().nullable(),
-  graphic_animation: z.string().optional().nullable(),
-  graphic_labels: z.array(z.string()).optional().nullable(),
-  on_screen_text: z.string(),
-  transition: z.enum(TRANSITION_TYPES),
-  sound_effects: z.string(),
-  music_direction: z.string(),
-  narration_emphasis: z.string().optional().nullable(),
-  ambient: z.string().optional().nullable(),
-  continuity_notes: z.string(),
 });
+
+// Lean paper-cut scene: only what the user pastes into Google Flow.
+// Legacy/extra fields are tolerated on input but stripped from stored data.
+export const sceneSchema = z
+  .object({
+    scene_number: z.number().int().positive(),
+    start_time: z.number().nonnegative(),
+    end_time: z.number().positive(),
+    duration: z.number().positive(),
+    narration: z.string(),
+    visual_goal: z.string().min(1),
+    image_prompt: z.string().min(1),
+    video_prompt: z.string().min(1),
+  })
+  .passthrough()
+  .transform((s) => ({
+    scene_number: s.scene_number,
+    start_time: s.start_time,
+    end_time: s.end_time,
+    duration: s.duration,
+    narration: s.narration,
+    visual_goal: s.visual_goal,
+    image_prompt: s.image_prompt,
+    video_prompt: s.video_prompt,
+  }));
 
 export type StoryInput = z.infer<typeof storySchema>;
 export type ScriptInput = z.infer<typeof scriptSchema>;
-export type SceneInput = z.infer<typeof sceneSchema>;
+export type SceneInput = z.infer<typeof sceneCoreSchema>;

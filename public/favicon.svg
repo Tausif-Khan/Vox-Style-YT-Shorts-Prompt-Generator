@@ -1,8 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Papercut Studio mark: stacked paper layers with a lifted top sheet -->
-  <rect width="64" height="64" rx="14" fill="#04121b"/>
-  <rect x="14" y="34" width="36" height="14" rx="2" fill="none" stroke="#5bb8ad" stroke-width="2.5" opacity="0.55"/>
-  <rect x="14" y="26" width="36" height="14" rx="2" fill="none" stroke="#7dd3c8" stroke-width="2.5" opacity="0.8"/>
-  <rect x="14" y="18" width="36" height="14" rx="2" fill="none" stroke="#7dd3c8" stroke-width="3"/>
-  <circle cx="44" cy="15" r="3.5" fill="#7dd3c8"/>
+  <!-- Papercut Studio master mark: play button in a broken ring + creation sparkle -->
+  <rect width="64" height="64" rx="14" fill="#14101c"/>
+  <path d="M38.48 7.86 A25 25 0 1 0 55.5 23.44" fill="none" stroke="#e8a33d" stroke-width="4.8" stroke-linecap="round"/>
+  <path d="M26.8 22.8 L43.2 32 L26.8 41.2 Z" fill="#e8a33d" stroke="#e8a33d" stroke-width="3.4" stroke-linejoin="round"/>
+  <path d="M49 5 Q50.7 13.3 59 15 Q50.7 16.7 49 25 Q47.3 16.7 39 15 Q47.3 13.3 49 5 Z" fill="#f6c76a"/>
 </svg>

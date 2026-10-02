@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { Aperture, ArrowLeft, Loader2, Send, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Loader2, Send, CheckCircle2 } from "lucide-react";
+import StudioMark from "../components/StudioMark";
 
 /**
  * Contact page: /contact.
@@ -48,7 +49,7 @@ export default function Contact() {
       <div className="panel p-8 md:p-10">
         <div className="mb-6 flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-            <Aperture className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+            <StudioMark className="h-5 w-5 text-amber-film" />
           </span>
           <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">PAPERCUT STUDIO</span>
         </div>

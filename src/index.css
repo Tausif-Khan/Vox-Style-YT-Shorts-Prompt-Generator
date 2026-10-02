@@ -29,18 +29,19 @@ body {
   margin: 0;
   min-height: 100vh;
   font-feature-settings: "kern" 1;
-  /* Aurora storm atmosphere: deep teal-green storm sky, lightning-tinted horizon glow. */
-  background-color: #04121b;
+  /* Papercut theatre stage: deep plum-ink backdrop lit by paper-gold, coral &
+     dusty-blue cut-paper glows — the layered-paper world the prompts create. */
+  background-color: #14101c;
   background-image:
-    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(64, 158, 146, 0.16), transparent 70%),
-    radial-gradient(ellipse 55% 40% at 85% 100%, rgba(38, 96, 112, 0.22), transparent 70%),
-    radial-gradient(ellipse 45% 35% at 10% 85%, rgba(125, 211, 200, 0.07), transparent 70%),
-    linear-gradient(180deg, #061826 0%, #04121b 45%, #030d15 100%);
+    radial-gradient(ellipse 65% 45% at 50% 0%, rgba(232, 163, 61, 0.11), transparent 70%),
+    radial-gradient(ellipse 55% 40% at 88% 100%, rgba(224, 100, 82, 0.1), transparent 70%),
+    radial-gradient(ellipse 45% 35% at 8% 82%, rgba(107, 147, 201, 0.11), transparent 70%),
+    linear-gradient(180deg, #1a1426 0%, #14101c 45%, #0e0b15 100%);
   background-attachment: fixed;
 }
 
 ::selection {
-  background: rgba(125, 211, 200, 0.35);
+  background: rgba(232, 163, 61, 0.35);
 }
 
 :focus-visible {
@@ -53,12 +54,12 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #04121b;
+  background: #14101c;
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.18);
   border-radius: 6px;
-  border: 2px solid #04121b;
+  border: 2px solid #14101c;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
@@ -106,13 +107,13 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold;
     color: #04121b;
     background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 4px 18px -4px rgba(125, 211, 200, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    box-shadow: 0 4px 18px -4px rgba(232, 163, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
     transition: all 0.2s var(--e-soft, ease);
   }
   .btn-primary:hover {
     transform: translateY(-1px);
     background: #ffffff;
-    box-shadow: 0 6px 24px -4px rgba(125, 211, 200, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    box-shadow: 0 6px 24px -4px rgba(232, 163, 61, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
   .btn-primary:disabled {
     cursor: not-allowed;
@@ -163,9 +164,9 @@ body {
     color: rgba(255, 255, 255, 0.4);
   }
   .input-dark:focus {
-    border-color: rgba(125, 211, 200, 0.65);
+    border-color: rgba(232, 163, 61, 0.65);
     background: rgba(255, 255, 255, 0.16);
-    box-shadow: 0 0 0 3px rgba(125, 211, 200, 0.15);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.15);
   }
   select.input-dark {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.62' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -174,7 +175,7 @@ body {
     padding-right: 2.25rem;
   }
   select.input-dark option {
-    background-color: #0a1f2c;
+    background-color: #1a1426;
     color: #ffffff;
   }
   .badge {
@@ -187,7 +188,7 @@ body {
   .tab-active::after {
     content: "";
     @apply absolute -bottom-px left-0 right-0 h-0.5 rounded-full;
-    background: #7dd3c8;
+    background: #e8a33d;
   }
   .divider-fade {
     @apply h-px w-full;
@@ -195,11 +196,11 @@ body {
   }
   .scene-num {
     @apply font-mono text-xs tracking-widest;
-    color: #7dd3c8;
+    color: #e8a33d;
   }
   .btn-generating {
     color: #04121b;
-    background: linear-gradient(110deg, rgba(255,255,255,0.95) 25%, rgba(125,211,200,0.9) 50%, rgba(255,255,255,0.95) 75%);
+    background: linear-gradient(110deg, rgba(255,255,255,0.95) 25%, rgba(232,163,61,0.9) 50%, rgba(255,255,255,0.95) 75%);
     background-size: 200% 100%;
     animation: btn-shimmer 1.6s linear infinite;
   }
@@ -249,7 +250,7 @@ body {
 }
 
 .progress-fill {
-  background: linear-gradient(90deg, #5bb8ad, #7dd3c8, #a7e8df);
+  background: linear-gradient(90deg, #cf8f2f, #e8a33d, #f6c76a);
   background-size: 200% 100%;
   animation: btn-shimmer 2.2s linear infinite;
   transition: width 0.6s ease;

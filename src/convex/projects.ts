@@ -27,12 +27,16 @@ export const getProjectInternal = internalQuery({
   },
 });
 
-/** Resolve "auto" scene count from duration — kept LOW for free Flow accounts. */
+/**
+ * Resolve "auto" scene count from duration. Shorts (60/90s @9:16) stay lean for
+ * free Flow accounts; long-form (120/180s @16:9) gets many more prompts.
+ */
 export function resolveSceneCount(duration: number, sceneCount: number): number {
   if (sceneCount > 0) return sceneCount;
-  if (duration <= 30) return 6;
-  if (duration <= 60) return 8;
-  return 10;
+  if (duration <= 60) return 6;
+  if (duration <= 90) return 8;
+  if (duration <= 120) return 10;
+  return 12;
 }
 
 export const create = mutation({

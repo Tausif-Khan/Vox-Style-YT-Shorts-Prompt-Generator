@@ -5,8 +5,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Aurora liquid-glass language: deep storm-teal atmosphere, white ink.
-        // "ink" = page/atmosphere surfaces, "bone" = text tones, amber.film = glass accent.
+        // Papercut theatre language: deep plum-ink stage, warm paper accents.
+        // "ink" = page/atmosphere surfaces, "bone" = text tones, amber.film = construction-paper gold accent.
         ink: {
           950: "#04121b",
           900: "#0a1f2c",
@@ -24,8 +24,8 @@ export default {
           400: "rgba(255,255,255,0.62)",
         },
         amber: {
-          film: "#7dd3c8",
-          film_dim: "#5bb8ad",
+          film: "#e8a33d",
+          film_dim: "#cf8f2f",
         },
       },
       fontFamily: {

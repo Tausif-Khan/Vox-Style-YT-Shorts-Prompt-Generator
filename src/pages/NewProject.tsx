@@ -6,13 +6,15 @@ import { getClientUserId } from "../lib/client-user";
 import type { DurationOption } from "../lib/types";
 import { Loader2, Sparkles } from "lucide-react";
 
-const DURATIONS: DurationOption[] = [30, 60, 90];
+// Shorts-only page: 60/90s @9:16 (the 30s option was removed).
+const DURATIONS: DurationOption[] = [60, 90];
 
 /** ponytail: mirror of server-side resolveSceneCount — resolve "auto" to the free-Flow budget. */
 function resolveSceneCount(duration: number): number {
-  if (duration <= 30) return 4;
   if (duration <= 60) return 6;
-  return 8;
+  if (duration <= 90) return 8;
+  if (duration <= 120) return 10;
+  return 12;
 }
 
 export default function NewProject() {

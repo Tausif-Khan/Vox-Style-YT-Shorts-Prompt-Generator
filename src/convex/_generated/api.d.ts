@@ -12,6 +12,8 @@ import type * as ai_geminiSchemas from "../ai/geminiSchemas.js";
 import type * as ai_index from "../ai/index.js";
 import type * as ai_prompts from "../ai/prompts.js";
 import type * as ai_provider from "../ai/provider.js";
+import type * as contact from "../contact.js";
+import type * as contactRequests from "../contactRequests.js";
 import type * as editing from "../editing.js";
 import type * as generation from "../generation.js";
 import type * as ideas from "../ideas.js";
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   "ai/index": typeof ai_index;
   "ai/prompts": typeof ai_prompts;
   "ai/provider": typeof ai_provider;
+  contact: typeof contact;
+  contactRequests: typeof contactRequests;
   editing: typeof editing;
   generation: typeof generation;
   ideas: typeof ideas;

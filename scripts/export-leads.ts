@@ -7,6 +7,11 @@
  *
  * CSV columns: email, name, email_domain, signin_count, last_seen, created_at
  * Open it in Excel/Sheets, or import into any newsletter tool.
+ *
+ * CAN-SPAM / anti-spam reminder for the operator: every marketing email sent
+ * to this list MUST include (1) a working unsubscribe/opt-out link honored
+ * within 10 days, and (2) the sender's valid physical postal address.
+ * The site's Privacy Policy promises this — keep it true.
  */
 import { ConvexHttpClient } from "convex/browser";
 import { writeFileSync } from "node:fs";

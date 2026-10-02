@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Lightbulb,
   Plus,
-  Aperture,
+  Layers,
 } from "lucide-react";
 
 const NAV = [
@@ -17,7 +17,7 @@ export default function AppShell() {
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-ink-700/80 bg-ink-900/60 px-4 py-7 backdrop-blur-md">
         <NavLink to="/" className="group mb-10 flex items-center gap-3 px-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30 transition group-hover:bg-amber-film/15">
-            <Aperture className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+            <Layers className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
           </span>
           <span className="leading-tight">
             <span className="block text-[13px] font-bold tracking-[0.16em] text-bone-50">

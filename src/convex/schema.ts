@@ -67,4 +67,15 @@ export default defineSchema({
     signin_count: v.number(),
     last_seen: v.number(), // epoch ms
   }).index("by_email", ["email"]),
+
+  // Contact form submissions (privacy requests, DMCA notices, questions).
+  // Stored server-side; also emailed to the operator via Resend.
+  contact_requests: defineTable({
+    name: v.string(),
+    email: v.string(),
+    request_type: v.string(), // privacy | dmca | other
+    message: v.string(),
+    emailed: v.boolean(),
+    created_at: v.number(),
+  }),
 });

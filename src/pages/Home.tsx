@@ -10,7 +10,7 @@ import ProjectWorkspace from "./ProjectWorkspace";
 import {
   Sparkles,
   Loader2,
-  Aperture,
+  Layers,
   Film,
   Timer,
   Trash2,
@@ -52,7 +52,7 @@ const FEATURES = [
 
 const FAQ = [
   {
-    q: "Is Documentary Studio really free?",
+    q: "Is Papercut Studio really free?",
     a: "Yes. Provide your name and email and the full package is free — no credit card, no trial period, no limits on ideas.",
   },
   {
@@ -73,7 +73,7 @@ const FAQ = [
   },
   {
     q: "Do I need experience with video editing or AI?",
-    a: "No. Copy the prompts, paste them into Google Flow, and follow the four steps above. If you can copy-paste, you can make a short.",
+    a: "Only a little. The tool generates multiple short videos — one clip per scene — plus separate images, so basic editing knowledge is needed to combine them into a single video with the narration. You don't need any AI experience: copy the prompts, paste them into Google Flow, and follow the four steps above.",
   },
   {
     q: "Can I edit or regenerate what it gives me?",
@@ -114,20 +114,27 @@ export default function Home() {
   const registerLead = useMutation(api.leads.register);
 
   // Sign-in gate: name + email, stored locally (no passwords).
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-  const [signInName, setSignInName] = useState("");
-  const [signInEmail, setSignInEmail] = useState("");
-  const [signInError, setSignInError] = useState("");
-  const [signingIn, setSigningIn] = useState(false);
-
-  useEffect(() => {
+  const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
     try {
       const raw = localStorage.getItem("docstudio_user");
-      if (raw) setUser(JSON.parse(raw));
+      return raw ? JSON.parse(raw) : null;
     } catch {
-      /* ignore */
+      return null;
     }
-  }, []);
+  });
+  // Welcome popup: shown immediately on first load until name+email are saved.
+  const [welcomeOpen, setWelcomeOpen] = useState(() => {
+    try {
+      return !localStorage.getItem("docstudio_user");
+    } catch {
+      return true;
+    }
+  });
+  const [signInName, setSignInName] = useState("");
+  const [signInEmail, setSignInEmail] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [signInError, setSignInError] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
 
   const handleSignIn = async () => {
     if (signingIn) return;
@@ -137,6 +144,11 @@ export default function Home() {
       const email = signInEmail.trim();
       const name = signInName.trim();
       if (!name) throw new Error("Please enter your name.");
+      // COPPA age gate: the service is not directed to children under 13,
+      // so we require an affirmative 13+ confirmation before collecting email.
+      if (!ageConfirmed) {
+        throw new Error("Please confirm you are 18 or older to continue.");
+      }
       // Client-side domain check for instant feedback; server re-validates.
       const domain = email.toLowerCase().split("@")[1] ?? "";
       const allowed = [
@@ -149,10 +161,11 @@ export default function Home() {
           "Please use an email address from a well-known provider (Gmail, Yahoo, Hotmail/Outlook, iCloud, etc.)."
         );
       }
-      await registerLead({ name, email });
+      await registerLead({ name, email, ageConfirmed });
       const session = { name, email: email.toLowerCase() };
       localStorage.setItem("docstudio_user", JSON.stringify(session));
       setUser(session);
+      setWelcomeOpen(false);
     } catch (err) {
       setSignInError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -237,15 +250,108 @@ export default function Home() {
 
   return (
     <div className="relative overflow-x-clip">
+      {/* ── Welcome modal: the FIRST thing shown on first load ── */}
+      {welcomeOpen && !user && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#020a10]/80 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Start creating"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
+            className="panel relative w-full max-w-md overflow-hidden p-6 text-left"
+          >
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+            />
+            <h2 className="relative mb-1 font-serif text-2xl text-bone-50">Start creating</h2>
+            <p className="relative mb-5 text-sm leading-relaxed text-bone-300">
+              Free forever — just your name and email. No password, ever.
+            </p>
+            <label className="label-xs relative mb-2 block">Your name</label>
+            <input
+              autoFocus
+              value={signInName}
+              onChange={(e) => setSignInName(e.target.value)}
+              placeholder="Jane Creator"
+              className="input-dark relative mb-4 w-full"
+              maxLength={80}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSignIn();
+              }}
+            />
+            <label className="label-xs relative mb-2 block">Email address</label>
+            <input
+              value={signInEmail}
+              onChange={(e) => setSignInEmail(e.target.value)}
+              placeholder="you@gmail.com"
+              type="email"
+              className="input-dark relative mb-1 w-full"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleSignIn();
+              }}
+            />
+            <p className="relative mb-4 text-[11px] leading-relaxed text-bone-400/80">
+              Gmail, Yahoo, Hotmail/Outlook, iCloud or other major providers —
+              temporary email addresses are blocked.
+            </p>
+            {signInError && (
+              <p className="relative mb-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+                {signInError}
+              </p>
+            )}
+            {/* COPPA age gate (required before we collect an email) */}
+            <label className="relative mb-4 flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={ageConfirmed}
+                onChange={(e) => setAgeConfirmed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#7dd3c8]"
+              />
+              <span className="text-[11px] leading-relaxed text-bone-400">
+                I confirm I am <span className="font-semibold text-bone-200">18 years of age or older</span>.
+                This service is not intended for children under 13, and we do not knowingly
+                collect information from them.
+              </span>
+            </label>
+            <button
+              className="btn-primary relative h-12 w-full text-base"
+              disabled={signingIn}
+              onClick={() => void handleSignIn()}
+            >
+              {signingIn ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" /> Start creating
+                </>
+              )}
+            </button>
+            <p className="relative mt-3 text-center text-[11px] text-bone-400/70">
+              By continuing you agree to our{" "}
+              <Link to="/legal" className="underline underline-offset-2 hover:text-bone-200">Terms</Link>{" "}
+              and{" "}
+              <Link to="/legal#privacy" className="underline underline-offset-2 hover:text-bone-200">Privacy Policy</Link>.
+            </p>
+          </motion.div>
+        </div>
+      )}
+
       {/* Nav */}
       <header className="absolute inset-x-0 top-0 z-20">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
           <Link to="/" className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-              <Aperture className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+              <Layers className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
             </span>
             <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">
-              DOCUMENTARY STUDIO
+              PAPERCUT STUDIO
             </span>
           </Link>
           <a href="#generator" className="btn-secondary">
@@ -276,16 +382,14 @@ export default function Home() {
           />
           <motion.h1
             {...fade(0)}
-            className="max-w-5xl font-serif text-5xl font-bold leading-[1.05] tracking-tight text-bone-50 md:text-7xl"
+            className="max-w-6xl font-serif text-5xl font-bold leading-[1.05] tracking-tight text-bone-50 md:text-7xl"
           >
-            One topic.
-            <br />
-            One complete <span className="italic text-amber-film">documentary.</span>
+            One topic. One complete <span className="italic text-amber-film">documentary.</span>
           </motion.h1>
 
           <motion.p
             {...fade(0.16)}
-            className="mt-6 max-w-xl text-lg leading-relaxed text-bone-300"
+            className="mt-6 max-w-2xl text-lg leading-relaxed text-bone-300"
           >
             Free tool. Share your name and email, then get the story, the timed
             script, and Flow-ready image + video prompts — everything you need for a
@@ -295,8 +399,8 @@ export default function Home() {
           {/* ── THE GENERATOR (tool section) ── */}
           <section id="generator" className="w-full scroll-mt-24 pt-14">
             {!user ? (
-              /* ── Sign-in gate ── */
-              <div className="panel relative mx-auto max-w-md overflow-hidden p-6 text-left">
+              /* ── Gate teaser — the full form opens in the welcome modal ── */
+              <div className="panel relative mx-auto max-w-md overflow-hidden p-6 text-center">
                 <div
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
@@ -305,52 +409,18 @@ export default function Home() {
                 <p className="relative mb-5 text-sm leading-relaxed text-bone-300">
                   Free forever — just your name and email. No password, ever.
                 </p>
-                <label className="label-xs relative mb-2 block">Your name</label>
-                <input
-                  value={signInName}
-                  onChange={(e) => setSignInName(e.target.value)}
-                  placeholder="Jane Creator"
-                  className="input-dark relative mb-4 w-full"
-                  maxLength={80}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void handleSignIn();
-                  }}
-                />
-                <label className="label-xs relative mb-2 block">Email address</label>
-                <input
-                  value={signInEmail}
-                  onChange={(e) => setSignInEmail(e.target.value)}
-                  placeholder="you@gmail.com"
-                  type="email"
-                  className="input-dark relative mb-1 w-full"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void handleSignIn();
-                  }}
-                />
-                <p className="relative mb-4 text-[11px] leading-relaxed text-bone-400/80">
-                  Gmail, Yahoo, Hotmail/Outlook, iCloud or other major providers —
-                  temporary email addresses are blocked.
-                </p>
-                {signInError && (
-                  <p className="relative mb-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-300">
-                    {signInError}
-                  </p>
-                )}
                 <button
                   className="btn-primary relative h-12 w-full text-base"
-                  disabled={signingIn}
-                  onClick={() => void handleSignIn()}
+                  onClick={() => setWelcomeOpen(true)}
                 >
-                  {signingIn ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" /> Start creating
-                    </>
-                  )}
+                  <Sparkles className="h-4 w-4" /> Start creating
                 </button>
+                <p className="relative mt-3 text-center text-[11px] text-bone-400/70">
+                  By continuing you agree to our{" "}
+                  <Link to="/legal" className="underline underline-offset-2 hover:text-bone-200">Terms</Link>{" "}
+                  and{" "}
+                  <Link to="/legal#privacy" className="underline underline-offset-2 hover:text-bone-200">Privacy Policy</Link>.
+                </p>
               </div>
             ) : (
               /* ── The generator (unlocked) ── */
@@ -531,7 +601,8 @@ export default function Home() {
       <div id="how-to-flow" className="mx-auto max-w-6xl scroll-mt-24 px-6 pb-8">
         <div className="mb-10 max-w-2xl mx-auto text-center">
           <p className="label-xs mb-3">From Prompts to Video</p>
-          <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
+          <h2            className="mx-auto max-w-3xl font-serif text-4xl leading-tight text-bone-50 md:text-5xl"
+          >
             Turn your prompts into a finished short — <span className="italic text-amber-film">in Google Flow.</span>
           </h2>
           <p className="mt-4 text-sm leading-relaxed text-bone-300">
@@ -604,7 +675,8 @@ export default function Home() {
       <div className="mx-auto max-w-6xl px-6 pb-24">
         <div className="mb-14 max-w-2xl mx-auto text-center">
           <p className="label-xs mb-3">The System</p>
-          <h2 className="font-serif text-4xl leading-tight text-bone-50 md:text-5xl">
+          <h2            className="mx-auto max-w-3xl font-serif text-4xl leading-tight text-bone-50 md:text-5xl"
+          >
             An AI production team, <span className="italic text-amber-film">on demand.</span>
           </h2>
         </div>
@@ -652,9 +724,14 @@ export default function Home() {
       <footer className="border-t border-ink-700/80 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6">
           <span className="flex items-center gap-2 text-xs text-bone-400">
-            <Aperture className="h-3.5 w-3.5 text-amber-film" />
-            Documentary Studio — Free AI Editorial Explainer
+            <Layers className="h-3.5 w-3.5 text-amber-film" />
+            Papercut Studio — Free VOX-Style Shorts Generator
           </span>
+          <nav className="flex items-center gap-4 text-xs text-bone-400">
+            <Link to="/legal" className="hover:text-bone-200">Privacy & Terms</Link>
+            <Link to="/legal#dmca" className="hover:text-bone-200">DMCA</Link>
+            <Link to="/contact" className="hover:text-bone-200">Contact Us</Link>
+          </nav>
           <span className="text-xs text-bone-400/60">
             Free forever · V2.0
           </span>

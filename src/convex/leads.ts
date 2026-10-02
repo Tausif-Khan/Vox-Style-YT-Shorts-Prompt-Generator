@@ -58,12 +58,16 @@ function normalizeEmail(raw: string): { ok: true; email: string; domain: string 
 
 /** Register (or re-greet) a lead. Returns the stored email on success. */
 export const register = mutation({
-  args: { name: v.string(), email: v.string() },
+  args: { name: v.string(), email: v.string(), ageConfirmed: v.boolean() },
   handler: async (ctx, args) => {
     const name = args.name.trim().slice(0, 80);
     const parsed = normalizeEmail(args.email);
     if (!parsed.ok) throw new Error(parsed.error);
     if (!name) throw new Error("Please enter your name.");
+    // COPPA: email may only be collected after an affirmative 13+ confirmation.
+    if (args.ageConfirmed !== true) {
+      throw new Error("Please confirm you are 13 or older to continue.");
+    }
 
     const existing = await ctx.db
       .query("leads")

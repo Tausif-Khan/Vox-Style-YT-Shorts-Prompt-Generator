@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Aperture, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import StudioMark from "../components/StudioMark";
 
 /** Fallback page (404 → here). The real experience is the single-page Home. */
 export default function Landing() {
@@ -9,10 +10,10 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
           <Link to="/" className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-              <Aperture className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+              <StudioMark className="h-5 w-5 text-amber-film" />
             </span>
             <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">
-              DOCUMENTARY STUDIO
+              PAPERCUT STUDIO
             </span>
           </Link>
         </div>

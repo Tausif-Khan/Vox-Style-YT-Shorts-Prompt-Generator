@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Layers, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import StudioMark from "../components/StudioMark";
 
 /**
  * Single combined legal page: /legal (also serves legacy /privacy, /terms, /dmca).
@@ -41,7 +42,7 @@ function LegalShell({ title, children }: { title: string; children: React.ReactN
       <div className="panel p-8 md:p-10">
         <div className="mb-6 flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-            <Layers className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+            <StudioMark className="h-5 w-5 text-amber-film" />
           </span>
           <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">PAPERCUT STUDIO</span>
         </div>
@@ -121,7 +122,7 @@ function Privacy() {
           they are governed by that provider's own terms. We do not send your email address to the AI provider.
         </p>
         <p>
-          The site displays advertising (Google AdSense). Advertising partners may set their own cookies subject to
+          The site displays advertising (Adsterra). Advertising partners may set their own cookies subject to
           their policies. Fonts are self-hosted — your browser is not sent to Google or any other font CDN.
         </p>
       </Section>

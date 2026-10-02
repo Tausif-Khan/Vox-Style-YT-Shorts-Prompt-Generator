@@ -5,10 +5,12 @@ import ProjectWorkspace from "./pages/ProjectWorkspace";
 import Legal from "./pages/Legal";
 import Contact from "./pages/Contact";
 import AppShell from "./components/AppShell";
+import PaperBackdrop from "./components/PaperBackdrop";
 
 export default function App() {
   return (
     <div className="film-grain min-h-screen">
+      <PaperBackdrop />
       <Routes>
         <Route path="/" element={<Home />} />
         {/* Legacy routes → single page */}

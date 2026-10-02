@@ -1,2 +1,4 @@
-# Google AdSense ads.txt — replace pub-0000000000000000 with your publisher ID
-google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# ads.txt — authorized digital sellers
+# Ads are served by Adsterra. If your Adsterra dashboard provides ads.txt
+# entries for your site, paste them below (they appear under Websites → your
+# site → ads.txt in the Adsterra panel).

@@ -4,13 +4,20 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { motion } from "framer-motion";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
-import type { DurationOption } from "../lib/types";
+import type { DurationOption, VideoFormat } from "../lib/types";
+import {
+  FORMAT_ASPECT,
+  FORMAT_DURATIONS,
+  FORMAT_LABELS,
+  durationLabel,
+  resolveSceneCount,
+} from "../lib/types";
 import AdSlot from "../components/AdSlot";
+import StudioMark from "../components/StudioMark";
 import ProjectWorkspace from "./ProjectWorkspace";
 import {
   Sparkles,
   Loader2,
-  Layers,
   Film,
   Timer,
   Trash2,
@@ -65,7 +72,7 @@ const FAQ = [
   },
   {
     q: "What do I get from one topic?",
-    a: "A complete production package: story architecture, a timed script broken into scenes, and copy-paste-ready image + video prompts for Google Flow.",
+    a: "A complete production package: story architecture, a timed script broken into scenes, and copy-paste-ready image + video prompts for Google Flow — as a short or a long-form video, your choice.",
   },
   {
     q: "How long does generation take?",
@@ -91,13 +98,8 @@ const fade = (delay: number) => ({
   transition: { duration: 0.6, delay, ease: [0.21, 0.47, 0.32, 0.98] as const },
 });
 
-const DURATIONS: DurationOption[] = [30, 60, 90];
-function resolveSceneCount(duration: number): number {
-  // Sized so the full video fits a free Google Flow account's daily credits.
-  if (duration <= 30) return 4;
-  if (duration <= 60) return 6;
-  return 8;
-}
+// Format → duration options live in lib/types (shorts 60/90 @9:16,
+// long-form 120/180 @16:9 with a much bigger prompt budget).
 
 function fmtDur(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -174,6 +176,7 @@ export default function Home() {
   };
 
   const [topic, setTopic] = useState("");
+  const [format, setFormat] = useState<VideoFormat>("short");
   const [duration, setDuration] = useState<DurationOption>(60);
   const [submitting, setSubmitting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -230,7 +233,7 @@ export default function Home() {
         title: topic.trim(),
         topic: topic.trim(),
         duration,
-        aspect_ratio: "9:16",
+        aspect_ratio: FORMAT_ASPECT[format],
         language: "English",
         scene_count: resolveSceneCount(duration),
         story_type: "auto",
@@ -253,7 +256,7 @@ export default function Home() {
       {/* ── Welcome modal: the FIRST thing shown on first load ── */}
       {welcomeOpen && !user && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#020a10]/80 px-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0e0b15]/80 px-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="Start creating"
@@ -266,7 +269,7 @@ export default function Home() {
           >
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.09),transparent)]"
             />
             <h2 className="relative mb-1 font-serif text-2xl text-bone-50">Start creating</h2>
             <p className="relative mb-5 text-sm leading-relaxed text-bone-300">
@@ -310,7 +313,7 @@ export default function Home() {
                 type="checkbox"
                 checked={ageConfirmed}
                 onChange={(e) => setAgeConfirmed(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#7dd3c8]"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#e8a33d]"
               />
               <span className="text-[11px] leading-relaxed text-bone-400">
                 I confirm I am <span className="font-semibold text-bone-200">18 years of age or older</span>.
@@ -348,7 +351,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
           <Link to="/" className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
-              <Layers className="h-4 w-4 text-amber-film" strokeWidth={1.75} />
+              <StudioMark className="h-5 w-5 text-amber-film" />
             </span>
             <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">
               PAPERCUT STUDIO
@@ -363,13 +366,13 @@ export default function Home() {
       {/* Left ad rail (desktop only) */}
       <div className="pointer-events-none fixed left-4 top-1/2 z-10 hidden -translate-y-1/2 xl:block">
         <div className="pointer-events-auto">
-          <AdSlot slot={import.meta.env.VITE_ADSENSE_SLOT_LEFT} format="vertical" className="w-40" minHeight={450} />
+          <AdSlot unit="sidebar" className="w-40" minHeight={450} />
         </div>
       </div>
       {/* Right ad rail (desktop only) */}
       <div className="pointer-events-none fixed right-4 top-1/2 z-10 hidden -translate-y-1/2 xl:block">
         <div className="pointer-events-auto">
-          <AdSlot slot={import.meta.env.VITE_ADSENSE_SLOT_RIGHT} format="vertical" className="w-40" minHeight={450} />
+          <AdSlot unit="sidebar" className="w-40" minHeight={450} />
         </div>
       </div>
 
@@ -378,7 +381,7 @@ export default function Home() {
         <div className="relative mx-auto flex max-w-6xl flex-col items-center px-6 pb-16 pt-32 text-center">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-[#7dd3c8]/[0.09] blur-[130px]"
+            className="pointer-events-none absolute inset-x-0 top-1/3 -z-10 h-[28rem] rounded-full bg-[#e8a33d]/[0.08] blur-[130px]"
           />
           <motion.h1
             {...fade(0)}
@@ -392,8 +395,8 @@ export default function Home() {
             className="mt-6 max-w-2xl text-lg leading-relaxed text-bone-300"
           >
             Free tool. Share your name and email, then get the story, the timed
-            script, and Flow-ready image + video prompts — everything you need for a
-            cinematic editorial short.
+            script, and Flow-ready image + video prompts — everything you need,
+            from shorts to long-form videos.
           </motion.p>
 
           {/* ── THE GENERATOR (tool section) ── */}
@@ -403,7 +406,7 @@ export default function Home() {
               <div className="panel relative mx-auto max-w-md overflow-hidden p-6 text-center">
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.09),transparent)]"
                 />
                 <h2 className="relative mb-1 font-serif text-2xl text-bone-50">Start creating</h2>
                 <p className="relative mb-5 text-sm leading-relaxed text-bone-300">
@@ -427,7 +430,7 @@ export default function Home() {
               <div className="panel relative mx-auto max-w-2xl overflow-hidden p-6 text-left">
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(125,211,200,0.08),transparent)]"
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_100%_at_50%_-30%,rgba(232,163,61,0.09),transparent)]"
                 />
                 <label className="label-xs relative mb-3 block">Your topic</label>
                 <textarea
@@ -445,22 +448,45 @@ export default function Home() {
                 />
 
               <div className="relative mt-5 flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <label className="label-xs mb-2 block">Duration</label>
-                  <div className="flex gap-2">
-                    {DURATIONS.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setDuration(d)}
-                        className={`rounded-lg border px-4 py-2 text-sm transition-all duration-150 ${
-                          duration === d
-                            ? "border-white/70 bg-white/15 font-medium text-white shadow-[0_0_0_3px_rgba(125,211,200,0.15)]"
-                            : "border-ink-600 bg-ink-850/70 text-bone-300 hover:-translate-y-px hover:border-bone-400/30 hover:text-bone-100"
-                        }`}
-                      >
-                        {d} sec
-                      </button>
-                    ))}
+                <div className="flex flex-wrap gap-5">
+                  <div>
+                    <label className="label-xs mb-2 block">Format</label>
+                    <div className="flex gap-2">
+                      {(Object.keys(FORMAT_DURATIONS) as VideoFormat[]).map((f) => (
+                        <button
+                          key={f}
+                          onClick={() => {
+                            setFormat(f);
+                            setDuration(FORMAT_DURATIONS[f][0]);
+                          }}
+                          className={`rounded-lg border px-4 py-2 text-sm transition-all duration-150 ${
+                            format === f
+                              ? "border-white/70 bg-white/15 font-medium text-white shadow-[0_0_0_3px_rgba(232,163,61,0.18)]"
+                              : "border-ink-600 bg-ink-850/70 text-bone-300 hover:-translate-y-px hover:border-bone-400/30 hover:text-bone-100"
+                          }`}
+                        >
+                          {FORMAT_LABELS[f]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label-xs mb-2 block">Duration</label>
+                    <div className="flex gap-2">
+                      {FORMAT_DURATIONS[format].map((d) => (
+                        <button
+                          key={d}
+                          onClick={() => setDuration(d)}
+                          className={`rounded-lg border px-4 py-2 text-sm transition-all duration-150 ${
+                            duration === d
+                              ? "border-white/70 bg-white/15 font-medium text-white shadow-[0_0_0_3px_rgba(232,163,61,0.18)]"
+                              : "border-ink-600 bg-ink-850/70 text-bone-300 hover:-translate-y-px hover:border-bone-400/30 hover:text-bone-100"
+                          }`}
+                        >
+                          {durationLabel(d)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <button
@@ -484,15 +510,25 @@ export default function Home() {
                 </button>
               </div>
               <p className="relative mt-4 text-xs text-bone-400/80">
-                Sized for Google Flow's free plan — {resolveSceneCount(duration)} papercut scenes
-                on Veo Light leaves daily credits to spare.
+                {format === "short" ? (
+                  <>
+                    Sized for Google Flow's free plan — {resolveSceneCount(duration)} papercut scenes
+                    on Veo Light leaves daily credits to spare.
+                  </>
+                ) : (
+                  <>
+                    Long-form 16:9 — {resolveSceneCount(duration)} papercut scenes for a deeper cut.
+                    At ~5 credits per clip that's about {resolveSceneCount(duration) * 5} of your ~50
+                    daily free credits, so render it across a day or two.
+                  </>
+                )}
               </p>
               </div>
             )}
 
             {/* Live pipeline progress — visible while generating */}
             {activeId && generating && (
-              <div id="progress-card" className="panel sheen mx-auto mt-6 max-w-2xl border-white/30 p-5 shadow-[0_0_40px_-12px_rgba(125,211,200,0.35)]">
+              <div id="progress-card" className="panel sheen mx-auto mt-6 max-w-2xl border-white/30 p-5 shadow-[0_0_40px_-12px_rgba(232,163,61,0.35)]">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="label-xs">Generating your documentary</p>
                   <span className="text-xs font-semibold text-amber-film">{progress}%</span>
@@ -554,7 +590,7 @@ export default function Home() {
           )}
 
           {/* Leaderboard ad — below the fold of the tool */}
-          <AdSlot className="mt-12 w-full max-w-4xl" minHeight={110} />
+          <AdSlot unit="banner" className="mt-12 w-full max-w-4xl" minHeight={110} />
         </div>
       </div>
 
@@ -579,7 +615,7 @@ export default function Home() {
                 <div className="min-w-0">
                   <h3 className="truncate font-serif text-base text-bone-50">{p.title}</h3>
                   <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-bone-400">
-                    {p.duration} sec · {p.status}
+                    {durationLabel(p.duration)} · {p.status}
                   </p>
                 </div>
                 <button
@@ -620,7 +656,7 @@ export default function Home() {
             {
               icon: Image,
               title: "2 · Generate the image (nano banana)",
-              body: "At labs.google/flow, start a new project and set the aspect ratio to 9:16. Click on the image and select the nano banana model, then paste the image prompt and generate. This is your scene's opening frame.",
+              body: "At labs.google/flow, start a new project and set the aspect ratio to match your format — 9:16 for shorts, 16:9 for long-form. Click on the image and select the nano banana model, then paste the image prompt and generate. This is your scene's opening frame.",
             },
             {
               icon: Video,
@@ -668,7 +704,7 @@ export default function Home() {
 
       {/* In-content ad (between the guide and the system section) */}
       <div className="mx-auto max-w-6xl px-6 pb-24">
-        <AdSlot className="w-full" minHeight={110} />
+        <AdSlot unit="banner" className="w-full" minHeight={110} />
       </div>
 
       {/* Features */}
@@ -700,7 +736,7 @@ export default function Home() {
         </div>
 
         {/* In-content ad (below recent projects) */}
-        <AdSlot className="mt-14 w-full" minHeight={110} />
+        <AdSlot unit="banner" className="mt-14 w-full" minHeight={110} />
       </div>
 
 
@@ -724,7 +760,7 @@ export default function Home() {
       <footer className="border-t border-ink-700/80 py-10">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6">
           <span className="flex items-center gap-2 text-xs text-bone-400">
-            <Layers className="h-3.5 w-3.5 text-amber-film" />
+            <StudioMark className="h-4 w-4 text-amber-film" />
             Papercut Studio — Free VOX-Style Shorts Generator
           </span>
           <nav className="flex items-center gap-4 text-xs text-bone-400">

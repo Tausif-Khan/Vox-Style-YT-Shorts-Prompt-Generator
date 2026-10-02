@@ -8,6 +8,7 @@ import {
   type ScriptData,
   type Scene,
   type ProjectStage,
+  durationLabel,
 } from "../lib/types";
 import {
   ArrowLeft,
@@ -220,7 +221,7 @@ export default function ProjectWorkspace({
             <p className="label-xs mb-2">Project</p>
             <h1 className="font-serif text-3xl leading-tight text-bone-50">{project.title}</h1>
             <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.14em] text-bone-400">
-              <span className="text-amber-film">{project.duration} sec</span>
+              <span className="text-amber-film">{durationLabel(project.duration)}</span>
               <span className="text-ink-500">·</span>
               <span>{project.aspect_ratio}</span>
               <span className="text-ink-500">·</span>
@@ -587,7 +588,7 @@ export default function ProjectWorkspace({
                 onClick={() => {
                   const lines: string[] = [
                     project.title.toUpperCase(),
-                    `${project.duration} sec · ${project.aspect_ratio} · ${project.language}`,
+                    `${durationLabel(project.duration)} · ${project.aspect_ratio} · ${project.language}`,
                     "".padEnd(50, "="),
                     "",
                     "SCRIPT",

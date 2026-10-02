@@ -1,7 +1,35 @@
 export type StageStatus = "QUEUED" | "GENERATING" | "COMPLETED" | "FAILED";
 
 export type AspectRatio = "9:16" | "16:9";
-export type DurationOption = 30 | 60 | 90;
+/** Shorts: 60/90s @ 9:16 · Long-form: 120/180s @ 16:9 (30s option removed). */
+export type DurationOption = 60 | 90 | 120 | 180;
+export type VideoFormat = "short" | "long";
+
+export const FORMAT_ASPECT: Record<VideoFormat, AspectRatio> = {
+  short: "9:16",
+  long: "16:9",
+};
+export const FORMAT_DURATIONS: Record<VideoFormat, DurationOption[]> = {
+  short: [60, 90],
+  long: [120, 180],
+};
+export const FORMAT_LABELS: Record<VideoFormat, string> = {
+  short: "Short · 9:16",
+  long: "Long · 16:9",
+};
+
+/** "60 sec" for shorts, "2 min" for long-form. */
+export function durationLabel(d: number): string {
+  return d >= 120 ? `${d / 60} min` : `${d} sec`;
+}
+
+/** Scene (prompt) budget per duration — long-form gets many more prompts. */
+export function resolveSceneCount(duration: number): number {
+  if (duration <= 60) return 6;
+  if (duration <= 90) return 8;
+  if (duration <= 120) return 10;
+  return 12;
+}
 
 export type StoryType =
   | "auto"

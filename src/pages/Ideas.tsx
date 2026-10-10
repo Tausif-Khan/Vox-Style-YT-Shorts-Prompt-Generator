@@ -63,9 +63,9 @@ export default function Ideas() {
       story_type: "auto",
     });
     navigate(`/project/${id}`);
-    void runPipeline({ projectId: id }).catch((e) =>
-      console.error("Generation failed", e)
-    );
+    void runPipeline({ projectId: id }).catch(() => {
+      /* Stage failures surface in the workspace (FAILED badge + error banner). */
+    });
   };
 
   const saveTitleEdit = async (ideaId: string, title: string) => {

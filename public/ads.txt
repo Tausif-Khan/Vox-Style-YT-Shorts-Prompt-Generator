@@ -1,4 +1,10 @@
 # ads.txt — authorized digital sellers
-# Ads are served by Adsterra. If your Adsterra dashboard provides ads.txt
-# entries for your site, paste them below (they appear under Websites → your
-# site → ads.txt in the Adsterra panel).
+# Ads are served by the provider selected per slot in src/components/AdSlot.tsx
+# (Adsterra today; flip VITE_AD_PROVIDER_SIDEBAR / VITE_AD_PROVIDER_BANNER to
+# "adsense" when you want Google in that slot instead).
+#
+# Paste each provider's real lines below before going live with it:
+# - AdSense: your AdSense dashboard → Sites → your site → ads.txt. It looks
+#   like:  google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+# - Adsterra: your Adsterra dashboard → Websites → your site → ads.txt
+#   (shown there if your account requires entries).

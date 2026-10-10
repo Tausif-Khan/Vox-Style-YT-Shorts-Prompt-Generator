@@ -27,6 +27,7 @@ export default function NewProject() {
   const [topic, setTopic] = useState(params.get("topic") ?? "");
   const [duration, setDuration] = useState<DurationOption>(60);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     const t = params.get("topic");
@@ -36,6 +37,7 @@ export default function NewProject() {
   const submit = async () => {
     if (!topic.trim() || submitting) return;
     setSubmitting(true);
+    setFormError("");
     try {
       const newId = await createProject({
         userId,
@@ -50,11 +52,11 @@ export default function NewProject() {
       // Navigate immediately — the workspace shows live stage progress;
       // generation continues in the background and failures are retryable there.
       navigate(`/project/${newId}`);
-      void runPipeline({ projectId: newId }).catch((err) => {
-        console.error("Generation failed", err);
+      void runPipeline({ projectId: newId }).catch(() => {
+        /* Stage failures surface in the workspace (FAILED badge + error banner). */
       });
-    } catch (err) {
-      console.error("Project creation failed", err);
+    } catch {
+      setFormError("Couldn't create the project — check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -119,6 +121,11 @@ export default function NewProject() {
           </>
         )}
       </button>
+      {formError && (
+        <p className="mt-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-center text-xs text-red-300">
+          {formError}
+        </p>
+      )}
       <p className="mt-3 text-center text-xs text-bone-400/70">
         Story → Script → Scene prompts. Every stage is reviewable and re-runnable.
       </p>

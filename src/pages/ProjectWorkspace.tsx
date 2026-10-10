@@ -116,6 +116,7 @@ export default function ProjectWorkspace({
   const regenScene = useAction(api.pipeline.regenerateScene);
   const updateNarration = useMutation(api.editing.updateNarration);
   const [running, setRunning] = useState<ProjectStage | null>(null);
+  const [actionError, setActionError] = useState("");
   const [regenTarget, setRegenTarget] = useState<number | null>(null);
   const [editingScene, setEditingScene] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -160,17 +161,23 @@ export default function ProjectWorkspace({
 
   const saveNarration = async (sceneNumber: number, narration: string) => {
     setSavingNarration(true);
+    setActionError("");
     try {
       await updateNarration({ projectId: project._id, sceneNumber, narration });
       setEditingScene(null);
     } catch (e) {
-      console.error(e);
+      setActionError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Couldn't save the narration — please try again."
+      );
     } finally {
       setSavingNarration(false);
     }
   };
 
   const handleRegenerateScene = async (sceneNumber: number, instruction: string) => {
+    setActionError("");
     try {
       await regenScene({
         projectId: project._id,
@@ -180,17 +187,24 @@ export default function ProjectWorkspace({
       setRegenTarget(null);
       setResyncScene(null);
     } catch (e) {
-      console.error(e);
+      setActionError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Scene regeneration failed — please try again."
+      );
     }
   };
 
   const handleRunStage = async (stage: ProjectStage) => {
     if (running) return;
     setRunning(stage);
+    setActionError("");
     try {
       await runStage({ projectId: project._id, stage });
     } catch (e) {
-      console.error(e);
+      setActionError(
+        e instanceof Error && e.message ? e.message : "Stage failed — please try again."
+      );
     } finally {
       setRunning(null);
     }
@@ -255,6 +269,13 @@ export default function ProjectWorkspace({
           <RefreshCw className="h-3 w-3" /> Use the Regenerate button at the bottom of each tab to redo a step
         </p>
       </div>
+
+      {actionError && (
+        <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-xs leading-relaxed text-red-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words">{actionError}</span>
+        </div>
+      )}
 
       {project.last_error && (
         <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-xs leading-relaxed text-red-300">

@@ -11,16 +11,22 @@ const address = import.meta.env.PROD
   ? (import.meta.env.VITE_CONVEX_URL as string)
   : window.location.origin;
 
-if (!address) {
-  console.error("Missing VITE_CONVEX_URL");
+// This site never writes to the browser console (product requirement):
+// a missing backend URL surfaces as an on-page message instead.
+if (address) {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ConvexProvider client={new ConvexReactClient(address)}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ConvexProvider>
+    </StrictMode>
+  );
+} else {
+  const notice = document.createElement("p");
+  notice.textContent = "Setup incomplete: VITE_CONVEX_URL is not configured.";
+  notice.style.cssText =
+    "min-height:100vh;margin:0;padding:2rem;background:#14101c;color:#fff;font-family:sans-serif;";
+  document.getElementById("root")?.replaceChildren(notice);
 }
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ConvexProvider client={new ConvexReactClient(address)}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </ConvexProvider>
-  </StrictMode>
-);

@@ -7,12 +7,23 @@
 PORT="${PORT:-3000}"
 LOG=/tmp/convex-dev.log
 
+# Convex precompiled backends newer than 2026-09-28 require glibc >= 2.38.
+# On older Linux hosts (e.g. Ubuntu 22.04 / glibc 2.35) `convex dev` would
+# keep fetching the latest binary and crash-loop on startup, so pin the last
+# compatible build there. Newer glibc (and non-Linux) keeps tracking latest.
+BACKEND_ARGS=""
+GLIBC_VER=$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')
+if [ -n "$GLIBC_VER" ] && [ "$(printf '%s\n' 2.38 "$GLIBC_VER" | sort -V | head -1)" != "2.38" ]; then
+  BACKEND_ARGS="--local-backend-version precompiled-2026-09-28-5c7cb5b"
+  echo "[dev.sh] glibc $GLIBC_VER < 2.38 — pinning Convex backend $BACKEND_ARGS" >&2
+fi
+
 echo "[dev.sh] starting Convex supervisor (log: $LOG)" >&2
 
 # Supervised Convex backend: restart forever, 3s backoff.
 (
   while true; do
-    bunx convex dev >> "$LOG" 2>&1
+    bunx convex dev $BACKEND_ARGS >> "$LOG" 2>&1
     echo "[dev.sh] $(date) convex dev exited ($?); restarting in 3s" >> "$LOG"
     sleep 3
   done

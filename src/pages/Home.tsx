@@ -179,6 +179,7 @@ export default function Home() {
   const [format, setFormat] = useState<VideoFormat>("short");
   const [duration, setDuration] = useState<DurationOption>(60);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
 
   // Live progress: watch the active project's stage statuses.
@@ -227,6 +228,7 @@ export default function Home() {
   const submit = async () => {
     if (!topic.trim() || submitting) return;
     setSubmitting(true);
+    setFormError("");
     try {
       const newId = await createProject({
         userId,
@@ -241,11 +243,11 @@ export default function Home() {
       setActiveId(newId);
       setJustStarted(true);
       window.history.replaceState(null, "", `/?project=${newId}`);
-      void runPipeline({ projectId: newId }).catch((err) =>
-        console.error("Generation failed", err)
-      );
-    } catch (err) {
-      console.error("Project creation failed", err);
+      void runPipeline({ projectId: newId }).catch(() => {
+        /* Stage failures surface in the workspace (FAILED badge + error banner). */
+      });
+    } catch {
+      setFormError("Couldn't start the project — check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -509,6 +511,11 @@ export default function Home() {
                   )}
                 </button>
               </div>
+              {formError && (
+                <p className="relative mt-3 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+                  {formError}
+                </p>
+              )}
               <p className="relative mt-4 text-xs text-bone-400/80">
                 {format === "short" ? (
                   <>

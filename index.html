@@ -52,9 +52,14 @@
     <!-- ══ Favicon ══ -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- Ads: Adsterra units are injected by src/components/AdSlot.tsx.
-         Set VITE_ADSTERRA_SIDEBAR_KEY and VITE_ADSTERRA_BANNER_KEY in the
-         environment to activate them; no script tag needed here. -->
+    <!-- Ads: provider-neutral units injected by src/components/AdSlot.tsx.
+         Per-slot provider switch (default adsterra):
+           VITE_AD_PROVIDER_SIDEBAR / VITE_AD_PROVIDER_BANNER = adsterra | adsense
+         Keys (Settings → Environment):
+           Adsterra: VITE_ADSTERRA_SIDEBAR_KEY, VITE_ADSTERRA_BANNER_KEY
+           AdSense:  VITE_ADSENSE_CLIENT, VITE_ADSENSE_SIDEBAR_SLOT,
+                     VITE_ADSENSE_BANNER_SLOT
+         No script tag needed here; the slot component loads the provider. -->
   </head>
   <body>
     <div id="root"></div>

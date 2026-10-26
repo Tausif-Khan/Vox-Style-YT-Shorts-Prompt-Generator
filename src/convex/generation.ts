@@ -1,6 +1,7 @@
-import { internalAction } from "./_generated/server";
-import { v } from "convex/values";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import { v, ConvexError } from "convex/values";
 import { getProvider, geminiSchemas } from "./ai";
+import { UpstreamError } from "./ai/provider";
 import {
   storyPrompt,
   scriptPrompt,
@@ -25,21 +26,91 @@ function resolveStoryType(topic: string, requested: string): string {
   return "historical_documentary";
 }
 
+/**
+ * What kind of work this call is, for quota accounting.
+ * - purpose drives the global request counter (initial vs regeneration metrics)
+ * - ipKey is the keyed hash of the caller's IP (per-IP limits)
+ * - regenKey/regenSeq link the call to an accepted regeneration so it can be
+ *   refunded if the failure happens BEFORE any upstream request is sent
+ */
+export const CHARGE = v.object({
+  purpose: v.union(v.literal("initial"), v.literal("regen")),
+  ipKey: v.optional(v.string()),
+  regenKey: v.optional(v.string()),
+  regenSeq: v.optional(v.number()),
+});
+
+export type Charge = {
+  purpose: "initial" | "regen";
+  ipKey?: string;
+  regenKey?: string;
+  regenSeq?: number;
+};
+
+/**
+ * The single choke point for OpenRouter traffic. Every upstream attempt:
+ *  1. atomically reserves global + per-IP quota (may throw ConvexError)
+ *  2. marks the regeneration as attempted (affects refund eligibility)
+ *  3. goes out through the provider (which calls back for retries too)
+ * and always releases its in-flight reservation afterwards.
+ */
 async function callAI(
+  ctx: ActionCtx,
+  charge: Charge,
   system: string,
   user: string,
   schemaKey: "story" | "script" | "scenes" | "scene",
   temperature = 0.6,
   maxTokens = 16384
 ): Promise<unknown> {
-  const provider = getProvider();
-  return await provider.generate({
-    system,
-    user,
-    schemaJson: JSON.stringify(geminiSchemas[schemaKey]),
-    temperature,
-    maxTokens,
-  });
+  let reservationId: string | undefined;
+  const onBeforeAttempt = async (): Promise<void> => {
+    // Free the previous attempt's slot BEFORE reserving the next one, so a
+    // bounded retry never counts against its own reservation (and can never
+    // self-deadlock the concurrency cap). Between the two, the slot is
+    // genuinely free: the earlier request has already completed.
+    if (reservationId) {
+      await ctx.runMutation(internal.quota.releaseUpstream, { reservationId });
+      reservationId = undefined;
+    }
+    const res = await ctx.runMutation(internal.quota.consumeUpstream, {
+      purpose: charge.purpose,
+      ipKey: charge.ipKey,
+      regenKey: charge.regenKey,
+      regenSeq: charge.regenSeq,
+    });
+    if (!res.ok) {
+      // Rejected before contacting OpenRouter: no upstream usage, clear code
+      // for the frontend to render a friendly, dated message.
+      throw new ConvexError({
+        code: res.code ?? "QUOTA_MINUTE",
+        retryAt: res.retryAt ?? 0,
+        message: res.message ?? "Generation is temporarily unavailable. Please try again shortly.",
+      });
+    }
+    reservationId = res.reservationId;
+  };
+
+  try {
+    return await getProvider().generate({
+      system,
+      user,
+      schemaJson: JSON.stringify(geminiSchemas[schemaKey]),
+      temperature,
+      maxTokens,
+      onBeforeAttempt,
+    });
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      // Status-only monitoring (no bodies, no keys, no payloads).
+      await ctx.runMutation(internal.quota.noteUpstreamError, { status: err.upstreamStatus });
+    }
+    throw err;
+  } finally {
+    if (reservationId) {
+      await ctx.runMutation(internal.quota.releaseUpstream, { reservationId });
+    }
+  }
 }
 
 /** Validate + normalize a scene object (lean papercut shape). */
@@ -69,8 +140,10 @@ export const runStage = internalAction({
   args: {
     projectId: v.id("projects"),
     ...STAGE_LITERALS,
+    charge: v.optional(CHARGE),
   },
   handler: async (ctx, args) => {
+    const charge: Charge = args.charge ?? { purpose: "initial" };
     const project = await ctx.runQuery(internal.projects.getProjectInternal, {
       id: args.projectId,
     });
@@ -87,6 +160,8 @@ export const runStage = internalAction({
       if (args.stage === "story") {
         const storyType = resolveStoryType(project.topic, project.story_type);
         const raw = await callAI(
+          ctx,
+          charge,
           "You are the research desk and story architect of a premium editorial documentary studio. Return JSON only.",
           storyPrompt({
             topic: project.topic,
@@ -115,6 +190,8 @@ export const runStage = internalAction({
         if (!storyRow) throw new Error("Run Story first.");
         const sceneCount = resolveSceneCount(project.duration, project.scene_count);
         const raw = await callAI(
+          ctx,
+          charge,
           "You are the scriptwriter of a premium editorial documentary studio. Return JSON only.",
           scriptPrompt({
             story: JSON.stringify(storyRow.data),
@@ -149,6 +226,8 @@ export const runStage = internalAction({
         };
 
         const raw = await callAI(
+          ctx,
+          charge,
           "You are the scene planner of a premium editorial documentary studio. Return JSON only.",
           scenePlannerPrompt({
             story: storyRow ? JSON.stringify(storyRow.data) : "",
@@ -197,8 +276,10 @@ export const regenerateScene = internalAction({
     projectId: v.id("projects"),
     sceneNumber: v.number(),
     instruction: v.optional(v.string()),
+    charge: v.optional(CHARGE),
   },
   handler: async (ctx, args) => {
+    const charge: Charge = args.charge ?? { purpose: "regen" };
     const scenes = await ctx.runQuery(internal.stages.getScenes, {
       projectId: args.projectId,
     });
@@ -212,6 +293,8 @@ export const regenerateScene = internalAction({
       .join("\n");
 
     const raw = await callAI(
+      ctx,
+      charge,
       "You are regenerating one scene of a premium editorial documentary. Return JSON only.",
       regenerateScenePrompt({
         scene: JSON.stringify(target.data),

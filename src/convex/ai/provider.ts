@@ -13,6 +13,56 @@ export interface GenerateOptions {
   schemaJson: string; // JSON Schema description of the expected output
   maxTokens?: number; // scenes payloads are large; 16384 avoids truncation
   temperature?: number;
+  /**
+   * Called immediately BEFORE each network attempt (initial and retry).
+   * The backend uses it to consume global quota capacity for that attempt;
+   * throwing aborts the call, so a rejected attempt never reaches OpenRouter.
+   */
+  onBeforeAttempt?: (attempt: number) => Promise<void>;
+}
+
+/** Upstream failure marker — carries only the HTTP status, never the body. */
+export class UpstreamError extends Error {
+  readonly upstreamStatus: number;
+  readonly timedOut: boolean;
+  constructor(message: string, upstreamStatus: number, timedOut = false) {
+    super(message);
+    this.name = "UpstreamError";
+    this.upstreamStatus = upstreamStatus;
+    this.timedOut = timedOut;
+  }
+}
+
+function timeoutMs(): number {
+  const raw = Number.parseInt(process.env.OPENROUTER_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(raw) ? Math.min(300_000, Math.max(5_000, raw)) : 60_000;
+}
+
+/** POST /chat/completions with a hard timeout. */
+async function postChat(body: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs());
+  try {
+    return await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        // OpenRouter recommends these headers for app attribution (optional).
+        "HTTP-Referer": "https://documentarystudio.app",
+        "X-Title": "Documentary Studio",
+      },
+      body,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error)?.name === "AbortError") {
+      throw new UpstreamError("The AI provider timed out. Please try again.", 0, true);
+    }
+    throw new UpstreamError("Could not reach the AI provider. Please try again.", 0);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface AIProvider {
@@ -36,38 +86,36 @@ export class OpenRouterProvider implements AIProvider {
       );
     }
 
+    const buildBody = (temperature: number): string =>
+      JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: opts.user },
+        ],
+        temperature,
+        max_tokens: opts.maxTokens ?? 16384,
+        response_format: { type: "json_object" },
+      });
+
     // Free OpenAI-compatible models don't enforce response_schema server-side,
     // so the schema rides in the prompt and parsing is hardened below.
     const system = opts.schemaJson
       ? `${opts.system}\n\nOUTPUT CONTRACT — respond with a single JSON object conforming EXACTLY to this JSON Schema (no extra keys, no commentary, no markdown):\n${opts.schemaJson}`
       : opts.system;
 
-    const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        // OpenRouter recommends these headers for app attribution (optional).
-        "HTTP-Referer": "https://documentarystudio.app",
-        "X-Title": "Documentary Studio",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: opts.user },
-        ],
-        temperature: opts.temperature ?? 0.6,
-        max_tokens: opts.maxTokens ?? 16384,
-        response_format: { type: "json_object" },
-      }),
-    });
+    // Attempt 1: quota is consumed by the caller's hook, then the request goes out.
+    await opts.onBeforeAttempt?.(1);
+    const res = await postChat(buildBody(opts.temperature ?? 0.6));
 
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `OpenRouter API error ${res.status}: ${body.slice(0, 300)}. Retry the stage.`
-      );
+      // Do not echo upstream response bodies (may contain provider details).
+      const status = res.status;
+      await res.text().catch(() => ""); // drain for connection reuse
+      if (status === 429) {
+        throw new UpstreamError("The AI provider is rate-limited right now. Please try again shortly.", status);
+      }
+      throw new UpstreamError(`The AI provider returned an error (HTTP ${status}). Please try again.`, status);
     }
 
     const json = (await res.json()) as {
@@ -83,28 +131,13 @@ export class OpenRouterProvider implements AIProvider {
     const parsed = tryParseJson(text);
     if (parsed !== undefined) return parsed;
 
-    // One automatic retry: router models occasionally return malformed or
-    // truncated JSON; a fresh call usually fixes it.
-    const retry = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://documentarystudio.app",
-        "X-Title": "Documentary Studio",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: opts.user },
-        ],
-        temperature: 0.4,
-        max_tokens: opts.maxTokens ?? 16384,
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (retry.ok) {
+    // One bounded automatic retry: router models occasionally return malformed
+    // or truncated JSON. The retry is a SECOND upstream request — it goes
+    // through the same quota hook, which may refuse it (the refusal then
+    // propagates so the caller sees the real quota message).
+    await opts.onBeforeAttempt?.(2);
+    const retry: Response | null = await postChat(buildBody(0.4));
+    if (retry && retry.ok) {
       const rjson = (await retry.json()) as {
         choices?: { message?: { content?: string } }[];
       };
@@ -116,6 +149,14 @@ export class OpenRouterProvider implements AIProvider {
         .trim();
       const rparsed = tryParseJson(rtext);
       if (rparsed !== undefined) return rparsed;
+    }
+    if (retry && !retry.ok) {
+      const status = retry.status;
+      await retry.text().catch(() => "");
+      if (status === 429) {
+        throw new UpstreamError("The AI provider is rate-limited right now. Please try again shortly.", status);
+      }
+      throw new UpstreamError(`The AI provider returned an error (HTTP ${status}). Please try again.`, status);
     }
 
     throw new Error(

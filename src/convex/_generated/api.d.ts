@@ -16,12 +16,17 @@ import type * as contact from "../contact.js";
 import type * as contactRequests from "../contactRequests.js";
 import type * as editing from "../editing.js";
 import type * as generation from "../generation.js";
+import type * as http from "../http.js";
 import type * as ideas from "../ideas.js";
+import type * as idempotency from "../idempotency.js";
 import type * as leads from "../leads.js";
 import type * as leadsAdmin from "../leadsAdmin.js";
 import type * as pipeline from "../pipeline.js";
 import type * as projects from "../projects.js";
+import type * as quota from "../quota.js";
+import type * as regen from "../regen.js";
 import type * as stages from "../stages.js";
+import type * as visitor from "../visitor.js";
 
 import type {
   ApiFromModules,
@@ -38,12 +43,17 @@ declare const fullApi: ApiFromModules<{
   contactRequests: typeof contactRequests;
   editing: typeof editing;
   generation: typeof generation;
+  http: typeof http;
   ideas: typeof ideas;
+  idempotency: typeof idempotency;
   leads: typeof leads;
   leadsAdmin: typeof leadsAdmin;
   pipeline: typeof pipeline;
   projects: typeof projects;
+  quota: typeof quota;
+  regen: typeof regen;
   stages: typeof stages;
+  visitor: typeof visitor;
 }>;
 
 /**

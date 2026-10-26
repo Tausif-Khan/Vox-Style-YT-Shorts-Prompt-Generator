@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { motion } from "framer-motion";
 import { api } from "../convex/_generated/api";
@@ -15,6 +15,8 @@ import {
 import AdSlot from "../components/AdSlot";
 import StudioMark from "../components/StudioMark";
 import ProjectWorkspace from "./ProjectWorkspace";
+import { ensureVisitorToken, withVisitor } from "../lib/visitor";
+import { toGenError, userMessage, describeLimit } from "../lib/genErrors";
 import {
   Sparkles,
   Loader2,
@@ -60,15 +62,15 @@ const FEATURES = [
 const FAQ = [
   {
     q: "Is Papercut Studio really free?",
-    a: "Yes. Provide your name and email and the full package is free — no credit card, no trial period, no limits on ideas.",
+    a: "Yes. Provide your name and email and the full package is free — no credit card, no trial period. Generation is gently rate-limited (per visitor and for the site as a whole) so the free tier stays healthy for everyone.",
   },
   {
     q: "Why do I need to provide my email?",
-    a: "Just your name and email — no password. It keeps the tool spam-free (temporary email addresses are blocked) and lets you pick up your recent projects on any visit.",
+    a: "Just your name and email — no password. It keeps the tool spam-free (temporary email addresses are blocked) and lets us tell you about new tools. Your projects stay tied to this browser, not to your email address.",
   },
   {
     q: "What do you do with my email?",
-    a: "Nothing besides keeping your projects tied to you. No spam, no selling data, no password to leak — because none is ever stored.",
+    a: "We collect your email only to notify you about new tools and features — nothing else, no selling or sharing. Generated content stays in your current browser/session and may not be available if you switch browsers or clear your browser data.",
   },
   {
     q: "What do I get from one topic?",
@@ -84,7 +86,7 @@ const FAQ = [
   },
   {
     q: "Can I edit or regenerate what it gives me?",
-    a: "Yes. Every step can be regenerated on its own, and each scene can be regenerated individually until it's right.",
+    a: "Yes. Every step can be regenerated on its own, and each scene can be regenerated individually until it's right — with a short 90-second cooldown per topic (and a daily cap) so the free tier stays healthy.",
   },
   {
     q: "Can I use the videos I make commercially?",
@@ -109,11 +111,19 @@ function fmtDur(ms: number): string {
 
 export default function Home() {
   const userId = getClientUserId();
+  // Router-managed URL updates: raw history.replaceState would desync React
+  // Router (wiping its per-entry state key) and confuse Back/Forward.
+  const navigate = useNavigate();
+  const showProject = (id: string) =>
+    navigate({ pathname: "/", search: `?project=${id}` }, { replace: true });
   const createProject = useMutation(api.projects.create);
   const runPipeline = useAction(api.pipeline.startPipeline);
   const removeProject = useMutation(api.projects.remove);
   const projects = useQuery(api.projects.list, { userId }) ?? [];
   const registerLead = useMutation(api.leads.register);
+  // Read-only quota snapshot for a friendly pre-submit check (the server
+  // is still the authority — this just avoids a doomed click).
+  const quotaSnap = useQuery(api.quota.snapshot, {});
 
   // Sign-in gate: name + email, stored locally (no passwords).
   const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
@@ -230,8 +240,19 @@ export default function Home() {
     setSubmitting(true);
     setFormError("");
     try {
+      // Friendly early check against the app-wide quota (server enforces it too).
+      if (quotaSnap && quotaSnap.dailyRemaining <= 0) {
+        setFormError(describeLimit({ code: "QUOTA_DAILY", retryAt: quotaSnap.dailyResetAt, message: "" }));
+        return;
+      }
+      if (quotaSnap && quotaSnap.minuteRemaining <= 0) {
+        setFormError(describeLimit({ code: "QUOTA_MINUTE", retryAt: quotaSnap.minuteResetAt, message: "" }));
+        return;
+      }
+      const visitorToken = await ensureVisitorToken();
       const newId = await createProject({
         userId,
+        visitorToken,
         title: topic.trim(),
         topic: topic.trim(),
         duration,
@@ -242,12 +263,18 @@ export default function Home() {
       });
       setActiveId(newId);
       setJustStarted(true);
-      window.history.replaceState(null, "", `/?project=${newId}`);
-      void runPipeline({ projectId: newId }).catch(() => {
-        /* Stage failures surface in the workspace (FAILED badge + error banner). */
-      });
-    } catch {
-      setFormError("Couldn't start the project — check your connection and try again.");
+      showProject(newId);
+      const requestId = crypto.randomUUID();
+      void withVisitor((token) => runPipeline({ projectId: newId, visitorToken: token, requestId })).catch(
+        (err) => setFormError(userMessage(err))
+      );
+    } catch (err) {
+      const e = toGenError(err);
+      setFormError(
+        e.code === "UNKNOWN"
+          ? "Couldn't start the project — check your connection and try again."
+          : userMessage(err)
+      );
     } finally {
       setSubmitting(false);
     }
@@ -615,7 +642,7 @@ export default function Home() {
                 className="panel panel-hover group flex cursor-pointer items-center justify-between p-4"
                 onClick={() => {
                   setActiveId(p._id);
-                  window.history.replaceState(null, "", `/?project=${p._id}`);
+                  showProject(p._id);
                   document.getElementById("generator")?.scrollIntoView({ behavior: "smooth" });
                 }}
               >

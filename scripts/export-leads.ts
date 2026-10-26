@@ -2,8 +2,11 @@
  * Export the sign-in email list (leads) to a CSV.
  *
  * Usage (from the project root):
- *   bun scripts/export-leads.ts                 # -> leads.csv
- *   bun scripts/export-leads.ts my-list.csv     # custom filename
+ *   LEADS_EXPORT_KEY=<key> bun scripts/export-leads.ts              # -> leads.csv
+ *   LEADS_EXPORT_KEY=<key> bun scripts/export-leads.ts my-list.csv  # custom filename
+ *
+ * The key is required: leadsAdmin:list fails closed without it.
+ *   bunx convex env set LEADS_EXPORT_KEY <random string>
  *
  * CSV columns: email, name, email_domain, signin_count, last_seen, created_at
  * Open it in Excel/Sheets, or import into any newsletter tool.
@@ -18,6 +21,16 @@ import { writeFileSync } from "node:fs";
 
 const client = new ConvexHttpClient(process.env.VITE_CONVEX_URL ?? "http://127.0.0.1:3210");
 
+const exportKey = process.env.LEADS_EXPORT_KEY ?? "";
+if (!exportKey) {
+  console.error(
+    "LEADS_EXPORT_KEY is not set.\n" +
+      "  1) bunx convex env set LEADS_EXPORT_KEY <random string>\n" +
+      "  2) export LEADS_EXPORT_KEY=<the same value> and re-run."
+  );
+  process.exit(1);
+}
+
 type Lead = {
   email: string;
   name: string;
@@ -27,7 +40,13 @@ type Lead = {
   _creationTime: number;
 };
 
-const leads = (await (client as any).query("leadsAdmin:list" as any, {})) as Lead[];
+let leads: Lead[];
+try {
+  leads = (await (client as any).query("leadsAdmin:list" as any, { exportKey })) as Lead[];
+} catch {
+  console.error("Export rejected: check LEADS_EXPORT_KEY against the Convex deployment.");
+  process.exit(1);
+}
 
 function csvEscape(v: string | number): string {
   const s = String(v);

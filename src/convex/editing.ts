@@ -1,5 +1,5 @@
 import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 
 /**
  * Update narration for a scene's script section. The scene keeps its own copy
@@ -12,7 +12,18 @@ export const updateNarration = mutation({
     narration: v.string(),
   },
   handler: async (ctx, args) => {
+    // Server-side validation limits payload size regardless of client code.
+    if (!Number.isInteger(args.sceneNumber) || args.sceneNumber < 1 || args.sceneNumber > 200) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "That scene number is not valid.", retryAt: 0 });
+    }
     const narration = args.narration.trim();
+    if (narration.length > 5000) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "Narration is too long (max 5000 characters).",
+        retryAt: 0,
+      });
+    }
     if (!narration) return; // never blank a scene's narration
     // Update script section narration
     const scriptRow = await ctx.db

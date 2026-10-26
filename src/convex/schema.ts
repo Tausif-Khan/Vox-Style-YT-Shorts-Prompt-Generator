@@ -30,6 +30,9 @@ export default defineSchema({
     // End-to-end pipeline timing (epoch ms), set by startPipeline.
     pipeline_started_at: v.optional(v.number()),
     pipeline_completed_at: v.optional(v.number()),
+    // Server-verified visitor id that created this project (set at creation;
+    // optional so projects created before identity was introduced still work).
+    visitor: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 
   story: defineTable({
@@ -78,4 +81,70 @@ export default defineSchema({
     emailed: v.boolean(),
     created_at: v.number(),
   }),
+
+  // ── Application-wide quota (authoritative, shared across ALL visitors) ──
+  // One singleton document (key = "global"). Never derived from cookies, so
+  // clearing cookies / private windows / other browsers cannot reset it.
+  runtime_quota: defineTable({
+    key: v.string(),
+    // Timestamps of actual upstream attempts inside the rolling minute.
+    recent: v.array(v.number()),
+    // IST calendar day the daily counters below belong to.
+    day_key: v.string(),
+    day_count: v.number(), // upstream attempts today (all purposes)
+    day_initial: v.number(), // internal metric: initial generation attempts
+    day_regen: v.number(), // internal metric: regeneration attempts
+    // In-flight upstream requests (id, start) for the concurrency cap.
+    inflight: v.array(v.object({ id: v.string(), at: v.number() })),
+    rejected: v.number(), // rejections by the app limiter (monitoring)
+    last_rejection_at: v.optional(v.number()),
+    last_alert_at: v.optional(v.number()), // log-dedupe for server alerts
+    upstream_errors: v.number(), // non-2xx upstream responses (monitoring)
+    upstream_429: v.number(), // upstream rate-limit responses (monitoring)
+    last_upstream_error_at: v.optional(v.number()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  }).index("by_key", ["key"]),
+
+  // Per-IP counters, keyed by a keyed hash — raw IPs are never stored.
+  ip_quota: defineTable({
+    key: v.string(),
+    recent: v.array(v.number()),
+    day_key: v.string(),
+    day_count: v.number(),
+    rejected: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_updated", ["updated_at"]),
+
+  // Per visitor + topic regeneration state (cooldown / allowance / lock).
+  regen_state: defineTable({
+    key: v.string(), // `${visitorId}:${topicFingerprint}`
+    visitor: v.string(),
+    topic_hash: v.string(),
+    accepted: v.number(),
+    cooldown_until: v.number(),
+    lock_until: v.number(),
+    last_accepted_at: v.number(),
+    // Sequence of the last upstream attempt for this key (refund logic).
+    attempt_seq: v.number(),
+    updated_at: v.number(),
+  }).index("by_key", ["key"]),
+
+  // Idempotency claims: dedupe double-clicks / parallel identical submissions.
+  idempotency: defineTable({
+    key: v.string(), // `${scope}:${visitorId}:${requestId}`
+    status: v.string(), // inflight | done | failed
+    created_at: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_created", ["created_at"]),
+
+  // Security / abuse monitoring events (no keys, no raw IPs, no payloads).
+  security_events: defineTable({
+    kind: v.string(),
+    detail: v.string(),
+    at: v.number(),
+  }).index("by_at", ["at"]),
 });

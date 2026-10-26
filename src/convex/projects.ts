@@ -1,5 +1,21 @@
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import { verifyVisitorToken } from "../lib/visitorToken";
+
+const DURATIONS = [60, 90, 120, 180];
+const ASPECT_RATIOS = ["9:16", "16:9"];
+
+function requireText(value: string, label: string, min: number, max: number): string {
+  const t = value.trim();
+  if (t.length < min || t.length > max) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: `${label} must be ${min}–${max} characters.`,
+      retryAt: 0,
+    });
+  }
+  return t;
+}
 
 export const list = query({
   args: { userId: v.string() },
@@ -42,6 +58,7 @@ export function resolveSceneCount(duration: number, sceneCount: number): number 
 export const create = mutation({
   args: {
     userId: v.string(),
+    visitorToken: v.string(),
     title: v.string(),
     topic: v.string(),
     duration: v.number(),
@@ -52,8 +69,45 @@ export const create = mutation({
     custom_story_direction: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Server-side validation — the client's checks are convenience only.
+    const visitorId = await verifyVisitorToken(args.visitorToken);
+    if (!visitorId) {
+      throw new ConvexError({
+        code: "INVALID_SESSION",
+        message: "Your session could not be verified. Please reload the page and try again.",
+        retryAt: 0,
+      });
+    }
+    const title = requireText(args.title, "Title", 3, 120);
+    const topic = requireText(args.topic, "Topic", 3, 300);
+    if (!DURATIONS.includes(args.duration)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Unsupported duration.", retryAt: 0 });
+    }
+    if (!ASPECT_RATIOS.includes(args.aspect_ratio)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Unsupported aspect ratio.", retryAt: 0 });
+    }
+    if (args.language.trim().length < 1 || args.language.trim().length > 40) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Unsupported language.", retryAt: 0 });
+    }
+    if (!Number.isInteger(args.scene_count) || args.scene_count < 0 || args.scene_count > 30) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Unsupported scene count.", retryAt: 0 });
+    }
+    if (!/^[a-z_]{0,40}$/.test(args.story_type)) {
+      throw new ConvexError({ code: "INVALID_INPUT", message: "Unsupported story type.", retryAt: 0 });
+    }
+    const custom = args.custom_story_direction?.slice(0, 1000);
+
     return await ctx.db.insert("projects", {
-      ...args,
+      userId: args.userId,
+      visitor: visitorId,
+      title,
+      topic,
+      duration: args.duration,
+      aspect_ratio: args.aspect_ratio,
+      language: args.language.trim().slice(0, 40),
+      scene_count: args.scene_count,
+      story_type: args.story_type,
+      custom_story_direction: custom,
       visual_style: "premium_editorial_explainer",
       status: "draft",
       stage_status: {
@@ -79,6 +133,16 @@ export const remove = mutation({
       for (const row of rows) await ctx.db.delete(row._id);
     }
     await ctx.db.delete(args.id);
+  },
+});
+
+/** Clear or set the project-level error banner (pipeline start failures). */
+export const setLastError = internalMutation({
+  args: { id: v.id("projects"), error: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) return;
+    await ctx.db.patch(args.id, { last_error: args.error });
   },
 });
 

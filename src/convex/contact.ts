@@ -17,6 +17,15 @@ import { internal } from "./_generated/api";
 const OPERATOR_EMAIL = "mtkgroupdesigns@gmail.com";
 const FROM = "Papercut Studio <onboarding@resend.dev>";
 
+/** Escape user-supplied text before it is interpolated into HTML email. */
+function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export const submit = action({
   args: {
     name: v.string(),
@@ -68,11 +77,11 @@ export const submit = action({
         reply_to: email,
         subject: `[Contact] ${subjectMap[requestType] ?? requestType} — ${name}`,
         html: [
-          `<p><strong>Name:</strong> ${name}</p>`,
-          `<p><strong>Email:</strong> ${email}</p>`,
-          `<p><strong>Request type:</strong> ${subjectMap[requestType] ?? requestType}</p>`,
+          `<p><strong>Name:</strong> ${esc(name)}</p>`,
+          `<p><strong>Email:</strong> ${esc(email)}</p>`,
+          `<p><strong>Request type:</strong> ${esc(subjectMap[requestType] ?? requestType)}</p>`,
           `<p><strong>Message:</strong></p>`,
-          `<pre style="font-family:inherit;white-space:pre-wrap">${message.replace(/</g, "&lt;")}</pre>`,
+          `<pre style="font-family:inherit;white-space:pre-wrap">${esc(message)}</pre>`,
         ].join("\n"),
       }),
     });

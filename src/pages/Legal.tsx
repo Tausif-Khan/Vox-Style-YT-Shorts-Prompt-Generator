@@ -132,6 +132,11 @@ function Privacy() {
           session-replay, heat-mapping, or behavior-tracking scripts. Form inputs are never recorded for replay
           purposes.
         </p>
+        <p>
+          We also set one essential cookie that holds only a random session identifier (it is HttpOnly, so scripts
+          cannot read it). It contains no personal data and no tracking identifiers — it exists solely to keep the
+          site's rate limits and anti-abuse protections fair across visits.
+        </p>
       </Section>
       <Section title="Data retention and deletion">
         <p>

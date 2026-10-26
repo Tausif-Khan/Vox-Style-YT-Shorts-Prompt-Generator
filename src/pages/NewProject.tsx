@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
+import { ensureVisitorToken, withVisitor } from "../lib/visitor";
+import { toGenError, userMessage } from "../lib/genErrors";
 import type { DurationOption } from "../lib/types";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -39,8 +41,10 @@ export default function NewProject() {
     setSubmitting(true);
     setFormError("");
     try {
+      const visitorToken = await ensureVisitorToken();
       const newId = await createProject({
         userId,
+        visitorToken,
         title: topic.trim(),
         topic: topic.trim(),
         duration,
@@ -52,11 +56,17 @@ export default function NewProject() {
       // Navigate immediately — the workspace shows live stage progress;
       // generation continues in the background and failures are retryable there.
       navigate(`/project/${newId}`);
-      void runPipeline({ projectId: newId }).catch(() => {
-        /* Stage failures surface in the workspace (FAILED badge + error banner). */
-      });
-    } catch {
-      setFormError("Couldn't create the project — check your connection and try again.");
+      const requestId = crypto.randomUUID();
+      void withVisitor((token) => runPipeline({ projectId: newId, visitorToken: token, requestId })).catch(
+        (err) => setFormError(userMessage(err))
+      );
+    } catch (err) {
+      const e = toGenError(err);
+      setFormError(
+        e.code === "UNKNOWN"
+          ? "Couldn't create the project — check your connection and try again."
+          : userMessage(err)
+      );
     } finally {
       setSubmitting(false);
     }

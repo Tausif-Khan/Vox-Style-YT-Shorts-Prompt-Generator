@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
+import { ensureVisitorToken, withVisitor } from "../lib/visitor";
+import { userMessage, toGenError } from "../lib/genErrors";
+import { formatRemaining } from "../lib/limits";
 import {
   type StoryData,
   type ScriptData,
@@ -128,6 +131,51 @@ export default function ProjectWorkspace({
   const script = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "script" });
   const scenes = useQuery(api.stages.getScenesPublic, { projectId: id as any });
 
+  // Visitor session (issued by the backend; required by generation actions).
+  const [visitorToken, setVisitorToken] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    ensureVisitorToken()
+      .then((t) => {
+        if (alive) setVisitorToken(t);
+      })
+      .catch(() => {
+        /* handled by regenStatus.ok === false below */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Authoritative cooldown / lock / quota state for this project's topic.
+  const regenStatus = useQuery(
+    api.regen.status,
+    visitorToken && id ? { projectId: id as any, visitorToken } : "skip"
+  );
+
+  // One shared 1s ticker, active ONLY while a restriction is counting down
+  // (no per-component timers that could disagree, no idle re-renders).
+  const [clock, setClock] = useState(() => Date.now());
+  const [skew, setSkew] = useState(0); // server clock − client clock
+  useEffect(() => {
+    if (regenStatus) setSkew(regenStatus.serverNow - Date.now());
+  }, [regenStatus]);
+  const serverNow = clock + skew;
+  const cooldownUntil = regenStatus?.cooldownUntil ?? 0;
+  const lockUntil = regenStatus?.lockUntil ?? 0;
+  const locked = lockUntil > serverNow;
+  const cooling = !locked && cooldownUntil > serverNow;
+  const restricted = locked || cooling;
+  useEffect(() => {
+    if (!restricted) return;
+    const t = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [restricted]);
+  // While restricted, keep ticking even without a server push: the countdown
+  // ends by itself and the buttons re-enable (server time remains the source
+  // of truth for authorization — enforcement happens on the next attempt).
+  const regenBlocked = restricted;
+
   // Tabs unlock as their stage completes. Story is always open; Script unlocks
   // once story is done, Scenes once script is done, Export once scenes are done.
   const stageStatus = project?.stage_status as Record<ProjectStage, string> | undefined;
@@ -177,34 +225,38 @@ export default function ProjectWorkspace({
   };
 
   const handleRegenerateScene = async (sceneNumber: number, instruction: string) => {
+    if (regenBlocked) return;
     setActionError("");
     try {
-      await regenScene({
-        projectId: project._id,
-        sceneNumber,
-        instruction: instruction.trim() || undefined,
-      });
+      const requestId = crypto.randomUUID();
+      await withVisitor((token) =>
+        regenScene({
+          projectId: project._id,
+          sceneNumber,
+          instruction: instruction.trim() || undefined,
+          visitorToken: token,
+          requestId,
+        })
+      );
       setRegenTarget(null);
       setResyncScene(null);
     } catch (e) {
-      setActionError(
-        e instanceof Error && e.message
-          ? e.message
-          : "Scene regeneration failed — please try again."
-      );
+      setActionError(userMessage(e));
     }
   };
 
   const handleRunStage = async (stage: ProjectStage) => {
-    if (running) return;
+    if (running || regenBlocked) return;
     setRunning(stage);
     setActionError("");
     try {
-      await runStage({ projectId: project._id, stage });
-    } catch (e) {
-      setActionError(
-        e instanceof Error && e.message ? e.message : "Stage failed — please try again."
+      const requestId = crypto.randomUUID();
+      await withVisitor((token) =>
+        runStage({ projectId: project._id, stage, visitorToken: token, requestId })
       );
+    } catch (e) {
+      const gen = toGenError(e);
+      setActionError(gen.code === "UNKNOWN" ? "Stage failed — please try again." : userMessage(e));
     } finally {
       setRunning(null);
     }
@@ -269,6 +321,21 @@ export default function ProjectWorkspace({
           <RefreshCw className="h-3 w-3" /> Use the Regenerate button at the bottom of each tab to redo a step
         </p>
       </div>
+
+      {/* Shared cooldown / topic-lock countdown — one source of truth for every
+          regeneration control in this project (all tabs and scenes). */}
+      {restricted && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-film/30 bg-amber-film/10 px-4 py-2.5 text-xs text-amber-film">
+          <span className="font-medium">
+            {locked
+              ? "You've reached the regeneration limit for this topic. You can regenerate again in"
+              : "Regeneration available in"}
+          </span>
+          <span className="font-mono text-sm font-semibold tabular-nums">
+            {formatRemaining((locked ? lockUntil : cooldownUntil) - serverNow)}
+          </span>
+        </div>
+      )}
 
       {actionError && (
         <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-xs leading-relaxed text-red-300">
@@ -355,7 +422,8 @@ export default function ProjectWorkspace({
                 <button
                   className="btn-secondary px-3.5 py-1.5 text-xs"
                   onClick={() => handleRunStage("story")}
-                  disabled={running !== null}
+                  disabled={running !== null || regenBlocked}
+                  title={regenBlocked ? "Regeneration is on cooldown for this topic" : undefined}
                 >
                   {running === "story" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                   Regenerate Story
@@ -463,7 +531,8 @@ export default function ProjectWorkspace({
               <button
                 className="btn-secondary px-3.5 py-1.5 text-xs"
                 onClick={() => handleRunStage("script")}
-                disabled={running !== null}
+                disabled={running !== null || regenBlocked}
+                title={regenBlocked ? "Regeneration is on cooldown for this topic" : undefined}
               >
                 {running === "script" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 Regenerate Script
@@ -511,7 +580,12 @@ export default function ProjectWorkspace({
                   </div>
                 </div>
                 <div className="mt-4 flex items-center gap-2 border-t border-ink-700 pt-3">
-                  <button className="btn-ghost" onClick={() => setRegenTarget(sc.scene_number)}>
+                  <button
+                    className="btn-ghost disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => setRegenTarget(sc.scene_number)}
+                    disabled={regenBlocked}
+                    title={regenBlocked ? "Regeneration is on cooldown for this topic" : undefined}
+                  >
                     <RefreshCw className="h-3.5 w-3.5" /> Regenerate Scene
                   </button>
                 </div>
@@ -519,14 +593,14 @@ export default function ProjectWorkspace({
                   <SceneRegenPanel
                     onConfirm={(instruction) => handleRegenerateScene(sc.scene_number, instruction)}
                     onCancel={() => setRegenTarget(null)}
-                    busy={running !== null}
+                    busy={running !== null || regenBlocked}
                   />
                 )}
                 {resyncScene === sc.scene_number && (
                   <SceneRegenPanel
                     onConfirm={(instruction) => handleRegenerateScene(sc.scene_number, instruction)}
                     onCancel={() => setResyncScene(null)}
-                    busy={running !== null}
+                    busy={running !== null || regenBlocked}
                   />
                 )}
               </div>
@@ -545,7 +619,8 @@ export default function ProjectWorkspace({
               <button
                 className="btn-secondary px-3.5 py-1.5 text-xs"
                 onClick={() => handleRunStage("scenes")}
-                disabled={running !== null}
+                disabled={running !== null || regenBlocked}
+                title={regenBlocked ? "Regeneration is on cooldown for this topic" : undefined}
               >
                 {running === "scenes" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 Regenerate All Scene Prompts

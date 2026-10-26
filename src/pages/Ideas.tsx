@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
+import { ensureVisitorToken, withVisitor } from "../lib/visitor";
 import { Search, Plus, Copy, Trash2, Pencil, Filter, Sparkles } from "lucide-react";
 
 const CATEGORIES = ["why", "history", "world", "other"] as const;
@@ -52,20 +53,29 @@ export default function Ideas() {
   );
 
   const generate = async (title: string) => {
-    const id = await createProject({
-      userId,
-      title,
-      topic: title,
-      duration: 60,
-      aspect_ratio: "9:16",
-      language: "English",
-      scene_count: 6, // 60-sec free-Flow budget
-      story_type: "auto",
-    });
-    navigate(`/project/${id}`);
-    void runPipeline({ projectId: id }).catch(() => {
-      /* Stage failures surface in the workspace (FAILED badge + error banner). */
-    });
+    try {
+      const visitorToken = await ensureVisitorToken();
+      const id = await createProject({
+        userId,
+        visitorToken,
+        title,
+        topic: title,
+        duration: 60,
+        aspect_ratio: "9:16",
+        language: "English",
+        scene_count: 6, // 60-sec free-Flow budget
+        story_type: "auto",
+      });
+      navigate(`/project/${id}`);
+      const requestId = crypto.randomUUID();
+      void withVisitor((token) => runPipeline({ projectId: id, visitorToken: token, requestId })).catch(
+        () => {
+          /* Start failures are recorded on the project (shown in the workspace). */
+        }
+      );
+    } catch {
+      /* Validation/session errors are shown by the caller's error UI. */
+    }
   };
 
   const saveTitleEdit = async (ideaId: string, title: string) => {

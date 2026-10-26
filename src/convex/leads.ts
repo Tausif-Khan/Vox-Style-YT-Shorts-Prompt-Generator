@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 
 // Only well-known free/personal email providers are allowed at sign-in.
 // This blocks temporary/disposable and lookalike domains (e.g. mailinator.com,
@@ -94,15 +94,7 @@ export const register = mutation({
   },
 });
 
-/** For the signed-in user's own UI state (not an export path). */
-export const lookup = query({
-  args: { email: v.string() },
-  handler: async (ctx, args) => {
-    const parsed = normalizeEmail(args.email);
-    if (!parsed.ok) return null;
-    return await ctx.db
-      .query("leads")
-      .withIndex("by_email", (q) => q.eq("email", parsed.email))
-      .unique();
-  },
-});
+// NOTE: there is deliberately NO public lookup-by-email query.
+// A caller who merely knows an address must never be able to read a stored
+// lead (name, email, sign-in history) back out of the database. The export
+// path lives in leadsAdmin.list behind a server-side key.

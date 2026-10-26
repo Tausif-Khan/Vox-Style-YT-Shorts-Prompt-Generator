@@ -7,6 +7,7 @@ import Contact from "./pages/Contact";
 import AppShell from "./components/AppShell";
 import PaperBackdrop from "./components/PaperBackdrop";
 import AdBlockGate from "./components/AdBlockGate";
+import ScrollManager from "./components/ScrollManager";
 
 export default function App() {
   return (
@@ -14,6 +15,9 @@ export default function App() {
     // goes inert behind a modal until ads are allowed (see AdBlockGate.tsx).
     <AdBlockGate>
       <div className="film-grain min-h-screen">
+        {/* Centralized scroll behavior: new routes start at the top, hashes
+            jump to their anchor, Back/Forward restore sensibly. */}
+        <ScrollManager />
         <PaperBackdrop />
         <Routes>
           <Route path="/" element={<Home />} />

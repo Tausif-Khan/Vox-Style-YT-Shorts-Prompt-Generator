@@ -1,0 +1,11 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+
+# NOTE: no Content-Security-Policy here yet. The app loads third-party ad
+# scripts (Adsterra/AdSense) and uses inline JSON-LD + framework inline
+# styles, so a CSP must be written and tested against a real ad fill before
+# it is shipped — a guess here would silently break revenue. See the security
+# audit in the handoff report for a candidate policy.

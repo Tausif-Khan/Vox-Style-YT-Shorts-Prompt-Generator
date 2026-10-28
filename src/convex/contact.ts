@@ -15,7 +15,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const OPERATOR_EMAIL = "mtkgroupdesigns@gmail.com";
-const FROM = "Papercut Studio <onboarding@resend.dev>";
+const FROM = "Format Lab <onboarding@resend.dev>";
 
 /** Escape user-supplied text before it is interpolated into HTML email. */
 function esc(value: string): string {

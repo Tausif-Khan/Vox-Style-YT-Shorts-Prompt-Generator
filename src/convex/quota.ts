@@ -4,10 +4,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
   evaluateUpstream,
-  istDayKey,
   limitsFromEnv,
-  nextIstDayStart,
+  nextUtcDayStart,
   pruneWindow,
+  utcDayKey,
   MINUTE_MS,
   type LimitsConfig,
 } from "../lib/limits";
@@ -62,7 +62,7 @@ function emptyGlobal(now: number): Omit<GlobalDoc, "_id"> {
   return {
     key: GLOBAL_KEY,
     recent: [],
-    day_key: istDayKey(now),
+    day_key: utcDayKey(now),
     day_count: 0,
     day_initial: 0,
     day_regen: 0,
@@ -102,7 +102,7 @@ export interface QuotaSnapshot {
 
 function snapshotFrom(doc: GlobalDoc | null, cfg: LimitsConfig, now: number): QuotaSnapshot {
   const recent = pruneWindow(doc?.recent, now, MINUTE_MS);
-  const dayCount = doc && doc.day_key === istDayKey(now) ? doc.day_count : 0;
+  const dayCount = doc && doc.day_key === utcDayKey(now) ? doc.day_count : 0;
   const inflight = (doc?.inflight ?? []).filter((e) => now - e.at < INFLIGHT_STALE_MS);
   return {
     perMinute: cfg.perMinute,
@@ -110,7 +110,7 @@ function snapshotFrom(doc: GlobalDoc | null, cfg: LimitsConfig, now: number): Qu
     minuteRemaining: Math.max(0, cfg.perMinute - recent.length),
     dailyRemaining: Math.max(0, cfg.perDay - dayCount),
     minuteResetAt: recent.length > 0 ? recent[0] + MINUTE_MS : now,
-    dailyResetAt: nextIstDayStart(now),
+    dailyResetAt: nextUtcDayStart(now),
     inflight: inflight.length,
     rejected: doc?.rejected ?? 0,
     upstreamErrors: doc?.upstream_errors ?? 0,
@@ -179,7 +179,7 @@ export const consumeUpstream = internalMutation({
     const doc = await getGlobal(ctx);
     const recent = pruneWindow(doc?.recent, now, MINUTE_MS);
     const inflight = (doc?.inflight ?? []).filter((e) => now - e.at < INFLIGHT_STALE_MS);
-    const dayKey = istDayKey(now);
+    const dayKey = utcDayKey(now);
     const dayCount = doc && doc.day_key === dayKey ? doc.day_count : 0;
 
     // Per-IP state (keyed hash — raw IP never stored).

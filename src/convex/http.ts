@@ -35,9 +35,21 @@ function parseCookies(header: string | null): Record<string, string> {
 }
 
 /**
- * CORS: when APP_ALLOWED_ORIGINS is configured only those origins are
- * allowed (with credentials). When unset (local/dev) any origin is reflected
- * so the preview works — set APP_ALLOWED_ORIGINS in production.
+ * CORS: ONLY origins explicitly listed in APP_ALLOWED_ORIGINS are reflected,
+ * and only then together with `Access-Control-Allow-Credentials`.
+ *
+ * SECURITY: reflecting an arbitrary Origin WITH credentials lets any website
+ * make a credentialed (cookie-bearing) POST to /session and READ the victim's
+ * visitor token from the JSON response. The old "unset → reflect anything"
+ * fallback therefore turned a forgotten env var into cross-origin session
+ * disclosure. It now fails closed:
+ *
+ *   - allowlist set  → only those origins get CORS (production posture)
+ *   - allowlist empty → no ACAO header at all; the frontend's credentialed
+ *     fetch is blocked by the browser and `src/lib/visitor.ts` automatically
+ *     falls back to the function-API path (api.visitor.session), so the app
+ *     keeps working — it just doesn't get the cross-origin HttpOnly cookie.
+ *   - local dev uses the same-origin Vite proxy, which needs no CORS.
  */
 function resolveOrigin(origin: string | null): string | null {
   if (!origin) return null;
@@ -45,7 +57,7 @@ function resolveOrigin(origin: string | null): string | null {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (list.length === 0) return origin;
+  if (list.length === 0) return null; // fail closed — never reflect blindly
   return list.includes(origin) ? origin : null;
 }
 

@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { ownsProject } from "./projects";
 
 /**
  * Update narration for a scene's script section. The scene keeps its own copy
@@ -10,8 +11,20 @@ export const updateNarration = mutation({
     projectId: v.id("projects"),
     sceneNumber: v.number(),
     narration: v.string(),
+    userId: v.string(),
+    visitorToken: v.string(),
   },
   handler: async (ctx, args) => {
+    // Ownership first: nobody may edit a project they do not own, whatever
+    // the client sends.
+    const project = await ctx.db.get(args.projectId);
+    if (!(await ownsProject(project, args.userId, args.visitorToken))) {
+      throw new ConvexError({
+        code: "FORBIDDEN",
+        message: "You don't have access to this project.",
+        retryAt: 0,
+      });
+    }
     // Server-side validation limits payload size regardless of client code.
     if (!Number.isInteger(args.sceneNumber) || args.sceneNumber < 1 || args.sceneNumber > 200) {
       throw new ConvexError({ code: "INVALID_INPUT", message: "That scene number is not valid.", retryAt: 0 });

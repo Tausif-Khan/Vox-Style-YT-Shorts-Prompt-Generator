@@ -50,7 +50,7 @@ async function postChat(body: string): Promise<Response> {
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         // OpenRouter recommends these headers for app attribution (optional).
         "HTTP-Referer": "https://documentarystudio.app",
-        "X-Title": "Documentary Studio",
+        "X-Title": "Format Lab",
       },
       body,
       signal: controller.signal,

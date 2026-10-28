@@ -229,7 +229,7 @@ function createLockOverlay(handlers: {
       </span>
       <h2 id="adblock-title" class="text-2xl font-bold text-bone-50">This page is paused</h2>
       <p id="adblock-desc" class="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-bone-200">
-        Papercut Studio is free because of ads. We've disabled the entire page
+        Format Lab is free because of ads. We've disabled the entire page
         until ads are allowed on this site — nothing else is affected.
       </p>
       <ol class="mx-auto mt-6 max-w-sm space-y-3 text-left">

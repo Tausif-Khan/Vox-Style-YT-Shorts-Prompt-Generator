@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
-import { ensureVisitorToken, withVisitor } from "../lib/visitor";
+import { useVisitorToken, withVisitor } from "../lib/visitor";
 import { userMessage, toGenError } from "../lib/genErrors";
 import { formatRemaining } from "../lib/limits";
 import {
@@ -126,26 +126,22 @@ export default function ProjectWorkspace({
   const [savingNarration, setSavingNarration] = useState(false);
   const [resyncScene, setResyncScene] = useState<number | null>(null);
 
-  const project = useQuery(api.projects.get, { id: id as any, userId });
-  const story = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "story" });
-  const script = useQuery(api.stages.getStagePublic, { projectId: id as any, table: "script" });
-  const scenes = useQuery(api.stages.getScenesPublic, { projectId: id as any });
+  // Visitor session (issued by the backend; required by generation actions
+  // and by the ownership-checked project reads below).
+  const { token: visitorToken, failed: sessionFailed } = useVisitorToken();
 
-  // Visitor session (issued by the backend; required by generation actions).
-  const [visitorToken, setVisitorToken] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    ensureVisitorToken()
-      .then((t) => {
-        if (alive) setVisitorToken(t);
-      })
-      .catch(() => {
-        /* handled by regenStatus.ok === false below */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const project = useQuery(
+    api.projects.get,
+    visitorToken && id ? { id: id as any, userId, visitorToken } : "skip"
+  );
+  const stageArgs = (table: "story" | "script") =>
+    visitorToken && id ? { projectId: id as any, table, userId, visitorToken } : "skip";
+  const story = useQuery(api.stages.getStagePublic, stageArgs("story"));
+  const script = useQuery(api.stages.getStagePublic, stageArgs("script"));
+  const scenes = useQuery(
+    api.stages.getScenesPublic,
+    visitorToken && id ? { projectId: id as any, userId, visitorToken } : "skip"
+  );
 
   // Authoritative cooldown / lock / quota state for this project's topic.
   const regenStatus = useQuery(
@@ -195,6 +191,16 @@ export default function ProjectWorkspace({
   );
 
   if (!project) {
+    if (sessionFailed) {
+      return (
+        <div className="flex flex-col items-center gap-2 py-32 text-center text-bone-400">
+          <p>We couldn't verify your session.</p>
+          <button className="btn-primary" onClick={() => window.location.reload()}>
+            Reload the page
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center justify-center gap-3 py-32 text-bone-400">
         <Loader2 className="h-5 w-5 animate-spin text-amber-film" /> Loading project…
@@ -211,7 +217,13 @@ export default function ProjectWorkspace({
     setSavingNarration(true);
     setActionError("");
     try {
-      await updateNarration({ projectId: project._id, sceneNumber, narration });
+      await updateNarration({
+        projectId: project._id,
+        sceneNumber,
+        narration,
+        userId,
+        visitorToken: visitorToken ?? "",
+      });
       setEditingScene(null);
     } catch (e) {
       setActionError(

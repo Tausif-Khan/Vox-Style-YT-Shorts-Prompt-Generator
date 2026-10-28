@@ -1,5 +1,6 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 
 const SEED_TOPICS: { title: string; category: string }[] = [
   { title: "Why We Have Weekends", category: "why" },
@@ -69,32 +70,57 @@ export const seed = mutation({
 export const add = mutation({
   args: { userId: v.string(), title: v.string(), category: v.string() },
   handler: async (ctx, args) => {
+    const title = args.title.trim().slice(0, 120);
+    if (title.length < 2) throw new Error("That title is too short.");
+    const category = ["why", "history", "world", "other"].includes(args.category)
+      ? args.category
+      : "other";
     return await ctx.db.insert("ideas", {
-      userId: args.userId,
-      title: args.title,
-      category: args.category,
+      userId: args.userId.slice(0, 120),
+      title,
+      category,
       status: "IDEA",
     });
   },
 });
 
+// Ownership: an idea id alone must never let one visitor rewrite or delete
+// another visitor's rows (these endpoints are public, like every Convex query).
+async function loadOwnIdea(
+  ctx: MutationCtx,
+  id: Id<"ideas">,
+  userId: string
+): Promise<Doc<"ideas"> | null> {
+  const idea = await ctx.db.get(id);
+  if (!idea || !userId || idea.userId !== userId) return null;
+  return idea;
+}
+
 export const updateStatus = mutation({
-  args: { id: v.id("ideas"), status: v.string() },
+  args: { id: v.id("ideas"), status: v.string(), userId: v.string() },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: args.status });
+    if (!(await loadOwnIdea(ctx, args.id, args.userId))) return;
+    const status = ["IDEA", "IN_PROGRESS", "DRAFT", "READY", "PUBLISHED"].includes(args.status)
+      ? args.status
+      : "IDEA";
+    await ctx.db.patch(args.id, { status });
   },
 });
 
 export const rename = mutation({
-  args: { id: v.id("ideas"), title: v.string() },
+  args: { id: v.id("ideas"), title: v.string(), userId: v.string() },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { title: args.title });
+    if (!(await loadOwnIdea(ctx, args.id, args.userId))) return;
+    const title = args.title.trim().slice(0, 120);
+    if (title.length < 2) return;
+    await ctx.db.patch(args.id, { title });
   },
 });
 
 export const remove = mutation({
-  args: { id: v.id("ideas") },
+  args: { id: v.id("ideas"), userId: v.string() },
   handler: async (ctx, args) => {
+    if (!(await loadOwnIdea(ctx, args.id, args.userId))) return;
     await ctx.db.delete(args.id);
   },
 });

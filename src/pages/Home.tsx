@@ -15,7 +15,7 @@ import {
 import AdSlot from "../components/AdSlot";
 import StudioMark from "../components/StudioMark";
 import ProjectWorkspace from "./ProjectWorkspace";
-import { ensureVisitorToken, withVisitor } from "../lib/visitor";
+import { ensureVisitorToken, useVisitorToken, withVisitor } from "../lib/visitor";
 import { toGenError, userMessage, describeLimit } from "../lib/genErrors";
 import {
   Sparkles,
@@ -61,7 +61,7 @@ const FEATURES = [
 
 const FAQ = [
   {
-    q: "Is Papercut Studio really free?",
+    q: "Is Format Lab really free?",
     a: "Yes. Provide your name and email and the full package is free — no credit card, no trial period. Generation is gently rate-limited (per visitor and for the site as a whole) so the free tier stays healthy for everyone.",
   },
   {
@@ -119,7 +119,14 @@ export default function Home() {
   const createProject = useMutation(api.projects.create);
   const runPipeline = useAction(api.pipeline.startPipeline);
   const removeProject = useMutation(api.projects.remove);
-  const projects = useQuery(api.projects.list, { userId }) ?? [];
+  // Project reads require the signed visitor token (ownership check); skip
+  // the query until session bootstrap finishes — see lib/visitor.ts.
+  const { token: visitorToken } = useVisitorToken();
+  const projects =
+    useQuery(
+      api.projects.list,
+      visitorToken && userId ? { userId, visitorToken } : "skip"
+    ) ?? [];
   const registerLead = useMutation(api.leads.register);
   // Read-only quota snapshot for a friendly pre-submit check (the server
   // is still the authority — this just avoids a doomed click).
@@ -195,7 +202,7 @@ export default function Home() {
   // Live progress: watch the active project's stage statuses.
   const activeProject = useQuery(
     api.projects.get,
-    activeId ? { id: activeId as any, userId } : "skip"
+    activeId && visitorToken ? { id: activeId as any, userId, visitorToken } : "skip"
   );
   const stages = activeProject?.stage_status as Record<string, string> | undefined;
   const completedCount = stages
@@ -383,7 +390,7 @@ export default function Home() {
               <StudioMark className="h-5 w-5 text-amber-film" />
             </span>
             <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">
-              PAPERCUT STUDIO
+              FORMAT LAB
             </span>
           </Link>
           <a href="#generator" className="btn-secondary">
@@ -656,7 +663,7 @@ export default function Home() {
                   className="btn-ghost text-red-300/70 opacity-0 transition hover:text-red-300 group-hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete "${p.title}"?`)) void removeProject({ id: p._id, userId });
+                    if (confirm(`Delete "${p.title}"?`)) if (visitorToken) void removeProject({ id: p._id, userId, visitorToken });
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -795,7 +802,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6">
           <span className="flex items-center gap-2 text-xs text-bone-400">
             <StudioMark className="h-4 w-4 text-amber-film" />
-            Papercut Studio — Free VOX-Style Shorts Generator
+            Format Lab — Free AI Shorts Generator
           </span>
           <nav className="flex items-center gap-4 text-xs text-bone-400">
             <Link to="/legal" className="hover:text-bone-200">Privacy & Terms</Link>

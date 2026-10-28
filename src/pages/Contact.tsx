@@ -44,14 +44,14 @@ export default function Contact() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       <Link to="/" className="mb-8 inline-flex items-center gap-1.5 text-xs text-bone-400 hover:text-bone-200">
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to Papercut Studio
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to Format Lab
       </Link>
       <div className="panel p-8 md:p-10">
         <div className="mb-6 flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-film/10 ring-1 ring-amber-film/30">
             <StudioMark className="h-5 w-5 text-amber-film" />
           </span>
-          <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">PAPERCUT STUDIO</span>
+          <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">FORMAT LAB</span>
         </div>
 
         {sent ? (

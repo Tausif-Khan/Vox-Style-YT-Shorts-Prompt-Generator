@@ -13,7 +13,7 @@ export default function Landing() {
               <StudioMark className="h-5 w-5 text-amber-film" />
             </span>
             <span className="text-[13px] font-bold tracking-[0.16em] text-bone-100">
-              PAPERCUT STUDIO
+              FORMAT LAB
             </span>
           </Link>
         </div>

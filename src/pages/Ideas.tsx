@@ -83,7 +83,7 @@ export default function Ideas() {
       setEditingId(null);
       return;
     }
-    await renameIdea({ id: ideaId as any, title: title.trim() });
+    await renameIdea({ id: ideaId as any, title: title.trim(), userId });
     setEditingId(null);
   };
 
@@ -213,7 +213,7 @@ export default function Ideas() {
               </button>
               <button
                 className="btn-ghost text-red-400/70 hover:text-red-400"
-                onClick={() => void removeIdea({ id: idea._id })}
+                onClick={() => void removeIdea({ id: idea._id, userId })}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>

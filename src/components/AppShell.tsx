@@ -17,10 +17,10 @@ export default function AppShell() {
           </span>
           <span className="leading-tight">
             <span className="block text-[13px] font-bold tracking-[0.16em] text-bone-50">
-              DOCUMENTARY
+              FORMAT
             </span>
             <span className="block text-[13px] font-bold tracking-[0.16em] text-amber-film">
-              STUDIO
+              LAB
             </span>
           </span>
         </NavLink>

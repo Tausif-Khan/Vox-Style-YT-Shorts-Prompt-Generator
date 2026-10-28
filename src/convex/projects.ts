@@ -1,9 +1,36 @@
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { verifyVisitorToken } from "../lib/visitorToken";
+import type { Doc } from "./_generated/dataModel";
 
 const DURATIONS = [60, 90, 120, 180];
 const ASPECT_RATIOS = ["9:16", "16:9"];
+
+/**
+ * Shared ownership check for every PUBLIC endpoint that reads or mutates a
+ * project (list/get/remove, stage reads, narration edits).
+ *
+ * A caller must present BOTH:
+ *   - the browser's userId (localStorage UUID), and
+ *   - a valid, server-signed visitor token.
+ * For projects created after identity was introduced the token must also be
+ * the visitor recorded at creation, so knowing a project id (which appears in
+ * the URL) or a userId alone is never enough.
+ *
+ * Projects created BEFORE identity was introduced have no `visitor` field;
+ * for those the userId check still applies (legacy behaviour) — documented as
+ * residual risk in the security audit.
+ */
+export async function ownsProject(
+  project: Doc<"projects"> | null,
+  userId: string,
+  visitorToken: string | undefined
+): Promise<boolean> {
+  if (!project || !userId || project.userId !== userId) return false;
+  if (!project.visitor) return true; // legacy project: userId governs
+  const visitorId = visitorToken ? await verifyVisitorToken(visitorToken) : null;
+  return visitorId !== null && visitorId === project.visitor;
+}
 
 function requireText(value: string, label: string, min: number, max: number): string {
   const t = value.trim();
@@ -18,20 +45,25 @@ function requireText(value: string, label: string, min: number, max: number): st
 }
 
 export const list = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) =>
-    await ctx.db
+  args: { userId: v.string(), visitorToken: v.string() },
+  handler: async (ctx, args): Promise<Doc<"projects">[]> => {
+    // Fail closed: an unverifiable session sees nothing.
+    const visitorId = await verifyVisitorToken(args.visitorToken);
+    if (!visitorId || !args.userId) return [];
+    const rows = await ctx.db
       .query("projects")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
-      .collect(),
+      .collect();
+    return rows.filter((p) => !p.visitor || p.visitor === visitorId);
+  },
 });
 
 export const get = query({
-  args: { id: v.id("projects"), userId: v.string() },
+  args: { id: v.id("projects"), userId: v.string(), visitorToken: v.string() },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
-    if (!project || project.userId !== args.userId) return null;
+    if (!(await ownsProject(project, args.userId, args.visitorToken))) return null;
     return project;
   },
 });
@@ -120,10 +152,10 @@ export const create = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("projects"), userId: v.string() },
+  args: { id: v.id("projects"), userId: v.string(), visitorToken: v.string() },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
-    if (!project || project.userId !== args.userId) return;
+    if (!(await ownsProject(project, args.userId, args.visitorToken))) return;
     const tables = ["story", "script", "scenes"] as const;
     for (const table of tables) {
       const rows = await ctx.db

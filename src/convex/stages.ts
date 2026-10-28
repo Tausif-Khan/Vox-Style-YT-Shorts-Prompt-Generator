@@ -1,5 +1,6 @@
 import { query, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { ownsProject } from "./projects";
 
 const stageArg = v.object({
   projectId: v.id("projects"),
@@ -18,8 +19,17 @@ export const getStage = internalQuery({
 });
 
 export const getStagePublic = query({
-  args: stageArg.fields,
+  args: {
+    projectId: v.id("projects"),
+    table: v.union(v.literal("story"), v.literal("script")),
+    userId: v.string(),
+    visitorToken: v.string(),
+  },
   handler: async (ctx, args) => {
+    // Generated content is private to the project owner: a project id alone
+    // (it is right there in the URL) must never be enough to read it.
+    const project = await ctx.db.get(args.projectId);
+    if (!(await ownsProject(project, args.userId, args.visitorToken))) return null;
     const rows = await ctx.db
       .query(args.table)
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
@@ -65,12 +75,15 @@ export const getScenes = internalQuery({
 });
 
 export const getScenesPublic = query({
-  args: { projectId: v.id("projects") },
-  handler: async (ctx, args) =>
-    await ctx.db
+  args: { projectId: v.id("projects"), userId: v.string(), visitorToken: v.string() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!(await ownsProject(project, args.userId, args.visitorToken))) return [];
+    return await ctx.db
       .query("scenes")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect(),
+      .collect();
+  },
 });
 
 export const saveScene = internalMutation({

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Papercut Studio master mark: play button in a broken ring + creation sparkle -->
+  <!-- Format Lab master mark: play button in a broken ring + creation sparkle -->
   <rect width="64" height="64" rx="14" fill="#14101c"/>
   <path d="M38.48 7.86 A25 25 0 1 0 55.5 23.44" fill="none" stroke="#e8a33d" stroke-width="4.8" stroke-linecap="round"/>
   <path d="M26.8 22.8 L43.2 32 L26.8 41.2 Z" fill="#e8a33d" stroke="#e8a33d" stroke-width="3.4" stroke-linejoin="round"/>

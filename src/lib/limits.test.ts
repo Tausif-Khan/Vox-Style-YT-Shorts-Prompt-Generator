@@ -4,10 +4,10 @@ import {
   advanceRegen,
   evaluateUpstream,
   formatRemaining,
-  istDayKey,
   limitsFromEnv,
-  nextIstDayStart,
+  nextUtcDayStart,
   normalizeTopic,
+  utcDayKey,
   pruneWindow,
   topicFingerprint,
   MINUTE_MS,
@@ -22,7 +22,7 @@ const cfg: LimitsConfig = { ...DEFAULT_LIMITS };
 function state(overrides: Partial<Parameters<typeof evaluateUpstream>[0]> = {}) {
   return {
     recent: [] as number[],
-    dayKey: istDayKey(Date.now()),
+    dayKey: utcDayKey(Date.now()),
     dayCount: 0,
     inflight: [] as { id: string; at: number }[],
     ...overrides,
@@ -30,22 +30,21 @@ function state(overrides: Partial<Parameters<typeof evaluateUpstream>[0]> = {}) 
 }
 
 describe("windows", () => {
-  test("istDayKey shifts by +5:30", () => {
-    // 2026-01-01T23:00:00Z → still 2026-01-02 in IST
-    expect(istDayKey(Date.parse("2026-01-01T23:00:00Z"))).toBe("2026-01-02");
-    // 2026-01-01T18:29:00Z → 2026-01-01 23:59 IST
-    expect(istDayKey(Date.parse("2026-01-01T18:29:00Z"))).toBe("2026-01-01");
+  test("utcDayKey is the UTC calendar day", () => {
+    expect(utcDayKey(Date.parse("2026-01-01T23:59:59Z"))).toBe("2026-01-01");
+    expect(utcDayKey(Date.parse("2026-01-02T00:00:00Z"))).toBe("2026-01-02");
+    expect(utcDayKey(Date.parse("2026-01-01T18:29:00Z"))).toBe("2026-01-01");
   });
 
-  test("nextIstDayStart is the next IST midnight", () => {
-    const ts = Date.parse("2026-01-01T18:29:00Z"); // 23:59 IST
-    const next = nextIstDayStart(ts);
-    expect(istDayKey(next)).toBe("2026-01-02");
+  test("nextUtcDayStart is the next UTC midnight", () => {
+    const ts = Date.parse("2026-01-01T18:29:00Z");
+    const next = nextUtcDayStart(ts);
+    expect(utcDayKey(next)).toBe("2026-01-02");
+    expect(next).toBe(Date.parse("2026-01-02T00:00:00Z"));
     expect(next - ts).toBeLessThan(DAY_MS);
     expect(next).toBeGreaterThan(ts);
-    // 00:30 IST on Jan 2 → next start is Jan 3 midnight IST
-    const later = Date.parse("2026-01-01T19:00:00Z");
-    expect(istDayKey(nextIstDayStart(later))).toBe("2026-01-03");
+    // The day after a rollover rolls over again.
+    expect(utcDayKey(nextUtcDayStart(next + 60_000))).toBe("2026-01-03");
   });
 
   test("pruneWindow keeps only the rolling minute", () => {
@@ -82,19 +81,20 @@ describe("global upstream quota", () => {
     expect(evaluateUpstream(state({ recent }), null, now, cfg, false).ok).toBe(true);
   });
 
-  test("blocks at 40 per IST day with reset at next IST midnight", () => {
-    const now = Date.parse("2026-03-05T10:00:00+05:30");
-    const d = evaluateUpstream(state({ dayCount: 40, dayKey: istDayKey(now) }), null, now, cfg, false);
+  test("blocks at 40 per UTC day with reset at next UTC midnight", () => {
+    const now = Date.parse("2026-03-05T10:00:00Z");
+    const d = evaluateUpstream(state({ dayCount: 40, dayKey: utcDayKey(now) }), null, now, cfg, false);
     expect(d.ok).toBe(false);
     if (!d.ok) {
       expect(d.code).toBe("QUOTA_DAILY");
-      expect(d.retryAt).toBe(nextIstDayStart(now));
-      expect(istDayKey(d.retryAt!)).toBe("2026-03-06");
+      expect(d.retryAt).toBe(nextUtcDayStart(now));
+      expect(d.retryAt).toBe(Date.parse("2026-03-06T00:00:00Z"));
+      expect(utcDayKey(d.retryAt!)).toBe("2026-03-06");
     }
   });
 
   test("daily counter resets when the stored day is a previous day", () => {
-    const now = Date.parse("2026-03-05T10:00:00+05:30");
+    const now = Date.parse("2026-03-05T10:00:00Z");
     const d = evaluateUpstream(state({ dayCount: 999, dayKey: "2020-01-01" }), null, now, cfg, false);
     expect(d.ok).toBe(true);
   });
@@ -109,7 +109,7 @@ describe("global upstream quota", () => {
 
   test("per-IP caps apply only when an IP key is present", () => {
     const now = Date.now();
-    const ip = { recent: Array.from({ length: cfg.ipPerMinute }, () => now - 500), dayKey: istDayKey(now), dayCount: 0 };
+    const ip = { recent: Array.from({ length: cfg.ipPerMinute }, () => now - 500), dayKey: utcDayKey(now), dayCount: 0 };
     const withIp = evaluateUpstream(state(), ip, now, cfg, true);
     expect(withIp.ok).toBe(false);
     if (!withIp.ok) expect(withIp.code).toBe("IP_MINUTE");

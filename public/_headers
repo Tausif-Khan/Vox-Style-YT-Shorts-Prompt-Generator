@@ -4,8 +4,20 @@
   X-Frame-Options: SAMEORIGIN
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
 
+  # HSTS: browsers ignore this header when it arrives over plain http, so it
+  # is inert on the local preview and only takes effect once the domain is
+  # served over https. Two years, include subdomains, no preload yet (add
+  # `; preload` only after confirming every subdomain is permanently https).
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+
 # NOTE: no Content-Security-Policy here yet. The app loads third-party ad
 # scripts (Adsterra/AdSense) and uses inline JSON-LD + framework inline
 # styles, so a CSP must be written and tested against a real ad fill before
-# it is shipped — a guess here would silently break revenue. See the security
-# audit in the handoff report for a candidate policy.
+# it is shipped — a guess here would silently break revenue. Candidate policy
+# and the rest of the security audit are in the handoff report:
+#   default-src 'self'; script-src 'self' <ad-hosts>; style-src 'self'
+#   'unsafe-inline'; img-src 'self' data: <ad-hosts>; connect-src 'self'
+#   <convex-url>; frame-ancestors 'self'; base-uri 'self';
+#   form-action 'self'; object-src 'none'
+# Note connect-src deliberately does NOT include OpenRouter: the browser must
+# never call it, and the CSP is what would enforce that.

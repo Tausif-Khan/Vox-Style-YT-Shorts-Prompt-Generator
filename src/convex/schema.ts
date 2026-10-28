@@ -89,7 +89,7 @@ export default defineSchema({
     key: v.string(),
     // Timestamps of actual upstream attempts inside the rolling minute.
     recent: v.array(v.number()),
-    // IST calendar day the daily counters below belong to.
+    // UTC calendar day the daily counters below belong to.
     day_key: v.string(),
     day_count: v.number(), // upstream attempts today (all purposes)
     day_initial: v.number(), // internal metric: initial generation attempts

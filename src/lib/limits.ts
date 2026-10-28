@@ -14,8 +14,7 @@
 export const MINUTE_MS = 60_000;
 export const DAY_MS = 86_400_000;
 
-/** Daily caps are counted per IST calendar day (site audience is IST-centric). */
-export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+/** Daily caps are counted per UTC calendar day (spec: "40 per UTC day"). */
 
 export type LimitCode =
   | "QUOTA_MINUTE" // application-wide rolling-minute cap reached
@@ -43,11 +42,11 @@ export type LimitDecision = { ok: true } | LimitDenial;
 export interface LimitsConfig {
   /** Global upstream OpenRouter requests per rolling minute. */
   perMinute: number;
-  /** Global upstream OpenRouter requests per IST calendar day. */
+  /** Global upstream OpenRouter requests per UTC calendar day. */
   perDay: number;
   /** Upstream requests per rolling minute, per hashed client IP. */
   ipPerMinute: number;
-  /** Upstream requests per IST calendar day, per hashed client IP. */
+  /** Upstream requests per UTC calendar day, per hashed client IP. */
   ipPerDay: number;
   /** Global cap on simultaneous in-flight upstream requests. */
   maxConcurrent: number;
@@ -96,15 +95,14 @@ export function limitsFromEnv(env: Record<string, string | undefined>): LimitsCo
   };
 }
 
-/** "YYYY-MM-DD" of the IST calendar day containing `ts`. */
-export function istDayKey(ts: number): string {
-  return new Date(ts + IST_OFFSET_MS).toISOString().slice(0, 10);
+/** "YYYY-MM-DD" of the UTC calendar day containing `ts`. */
+export function utcDayKey(ts: number): string {
+  return new Date(ts).toISOString().slice(0, 10);
 }
 
-/** Epoch ms of the next IST midnight after `ts` (daily reset time). */
-export function nextIstDayStart(ts: number): number {
-  const dayStartUtcMidnight = Date.parse(`${istDayKey(ts)}T00:00:00Z`);
-  return dayStartUtcMidnight - IST_OFFSET_MS + DAY_MS;
+/** Epoch ms of the next UTC midnight after `ts` (daily reset time). */
+export function nextUtcDayStart(ts: number): number {
+  return Date.parse(`${utcDayKey(ts)}T00:00:00Z`) + DAY_MS;
 }
 
 /** Keep only timestamps inside the rolling window ending at `now`. */
@@ -116,7 +114,7 @@ export function pruneWindow(timestamps: readonly number[] | undefined, now: numb
 
 export interface UpstreamState {
   recent: readonly number[]; // upstream attempt timestamps inside the last minute
-  dayKey: string; // IST day the counters belong to
+  dayKey: string; // UTC day the counters belong to
   dayCount: number; // upstream attempts today
   inflight: readonly { id: string; at: number }[];
 }
@@ -155,14 +153,14 @@ export function evaluateUpstream(
       message: "The site is receiving a lot of generation requests. Please try again in about a minute.",
     };
   }
-  const dayKey = istDayKey(now);
+  const dayKey = utcDayKey(now);
   const dayCount = state.dayKey === dayKey ? state.dayCount : 0;
   if (dayCount >= cfg.perDay) {
     return {
       ok: false,
       code: "QUOTA_DAILY",
-      retryAt: nextIstDayStart(now),
-      message: "Today's generation quota is used up. Generation resumes tomorrow (IST).",
+      retryAt: nextUtcDayStart(now),
+      message: "Today's generation quota is used up. Generation resumes at 00:00 UTC.",
     };
   }
   if (hasIp && ip) {
@@ -180,8 +178,8 @@ export function evaluateUpstream(
       return {
         ok: false,
         code: "IP_DAILY",
-        retryAt: nextIstDayStart(now),
-        message: "Your network has used its generation allowance for today. Please try again tomorrow.",
+      retryAt: nextUtcDayStart(now),
+      message: "Your network has used its generation allowance for today. Please try again tomorrow.",
       };
     }
   }

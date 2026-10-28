@@ -18,6 +18,7 @@
  * identity (in production the cookie restores the previous one).
  */
 
+import { useEffect, useState } from "react";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 
@@ -100,6 +101,49 @@ export function clearVisitorToken(): void {
   } catch {
     /* storage unavailable — nothing to clear */
   }
+}
+
+/** Read the cached token without throwing when storage is unavailable. */
+function readCachedToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * React hook: resolves the visitor token once per mount and reports whether
+ * session bootstrap FAILED (so the UI can say so instead of hanging).
+ *
+ * Public read endpoints that touch project data require this token, so pages
+ * `"skip"` their queries until it is available.
+ */
+export function useVisitorToken(): { token: string | null; failed: boolean } {
+  const [token, setToken] = useState<string | null>(readCachedToken);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    // Already cached (common case) — resolve synchronously on mount.
+    if (token) return;
+    ensureVisitorToken()
+      .then((t) => {
+        if (alive) {
+          setToken(t);
+          setFailed(false);
+        }
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { token, failed };
 }
 
 /**

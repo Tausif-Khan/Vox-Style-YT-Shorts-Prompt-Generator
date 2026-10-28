@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Papercut Studio backdrop — the layered paper-cut world the prompts create:
+ * Format Lab backdrop — the layered paper-cut world the prompts create:
  * a scalloped gold paper sun, drifting torn-paper clouds, floating confetti
  * cutouts, and stacked torn-paper hills with drop shadows between layers.
  * The whole scene is interactive: layers shift with the mouse (parallax),

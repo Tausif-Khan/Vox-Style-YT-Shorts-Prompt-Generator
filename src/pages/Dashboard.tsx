@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { getClientUserId } from "../lib/client-user";
+import { useVisitorToken } from "../lib/visitor";
 import { Plus, Clock, Film, ArrowUpRight, Trash2, Sparkles } from "lucide-react";
 import { STORY_TYPE_LABELS, type StoryType } from "../lib/types";
 
@@ -15,7 +16,16 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
 
 export default function Dashboard() {
   const userId = getClientUserId();
-  const projects = useQuery(api.projects.list, { userId }) ?? [];
+  // Project reads require the signed visitor token (ownership check on the
+  // server). While the session resolves we show a loading state instead of
+  // flashing the empty state.
+  const { token: visitorToken, failed: sessionFailed } = useVisitorToken();
+  const projectRows = useQuery(
+    api.projects.list,
+    visitorToken && userId ? { userId, visitorToken } : "skip"
+  );
+  const loadingProjects = !sessionFailed && (!visitorToken || projectRows === undefined);
+  const projects = projectRows ?? [];
   const seedIdeas = useMutation(api.ideas.seed);
   const removeProject = useMutation(api.projects.remove);
   const navigate = useNavigate();
@@ -59,7 +69,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {projects.length === 0 ? (
+      {loadingProjects ? (
+        <div className="panel flex items-center justify-center gap-3 px-8 py-20 text-bone-400">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-amber-film/30 border-t-amber-film" />
+          Loading your workspace…
+        </div>
+      ) : projects.length === 0 ? (
         <div className="panel relative flex flex-col items-center gap-3 overflow-hidden px-8 py-20 text-center">
           <div
             aria-hidden
@@ -128,7 +143,8 @@ export default function Dashboard() {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm(`Delete "${p.title}"?`)) {
-                          void removeProject({ id: p._id, userId });
+                          if (visitorToken)
+                            void removeProject({ id: p._id, userId, visitorToken });
                         }
                       }}
                     >
